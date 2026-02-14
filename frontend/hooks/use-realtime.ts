@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { realtimeService } from '@/lib/services/realtime.service';
-import { Source, Annotation, VaultMember, ActivityLog } from '@/lib/database.types';
+import { Source, Annotation, VaultMember, ActivityLog, FileRecord, Notification } from '@/lib/database.types';
 
 export function useRealtimeSources(vaultId: string, initial: Source[] = []) {
   const [sources, setSources] = useState<Source[]>(initial);
@@ -100,4 +100,52 @@ export function useRealtimeAnnotations(sourceId: string, initial: Annotation[] =
   }, [sourceId]);
 
   return { annotations, setAnnotations };
+}
+
+export function useRealtimeFiles(vaultId: string, initial: FileRecord[] = []) {
+  const [files, setFiles] = useState<FileRecord[]>(initial);
+
+  useEffect(() => {
+    setFiles(initial);
+  }, [initial]);
+
+  useEffect(() => {
+    if (!vaultId) return;
+    const unsub = realtimeService.subscribeToFiles(vaultId, (data) => {
+      if (data.type === 'file_uploaded') {
+        setFiles((prev) => [data.payload.new, ...prev]);
+      } else if (data.type === 'file_deleted') {
+        setFiles((prev) => prev.filter((f) => f.id !== data.payload.old.id));
+      }
+    });
+    return unsub;
+  }, [vaultId]);
+
+  return { files, setFiles };
+}
+
+export function useRealtimeNotifications(userId: string | undefined, initial: Notification[] = []) {
+  const [notifications, setNotifications] = useState<Notification[]>(initial);
+
+  useEffect(() => {
+    setNotifications(initial);
+  }, [initial]);
+
+  useEffect(() => {
+    if (!userId) return;
+    const unsub = realtimeService.subscribeToNotifications(userId, (data) => {
+      if (data.type === 'notification_received') {
+        setNotifications((prev) => [data.payload.new, ...prev]);
+      } else if (data.type === 'notification_updated') {
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === data.payload.new.id ? data.payload.new : n))
+        );
+      } else if (data.type === 'notification_deleted') {
+        setNotifications((prev) => prev.filter((n) => n.id !== data.payload.old.id));
+      }
+    });
+    return unsub;
+  }, [userId]);
+
+  return { notifications, setNotifications };
 }

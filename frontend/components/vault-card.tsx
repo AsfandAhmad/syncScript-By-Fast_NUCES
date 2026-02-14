@@ -3,8 +3,9 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { RoleBadge } from '@/components/role-badge';
 import { Trash2, FolderOpen, Clock, FileText } from 'lucide-react';
-import { Vault } from '@/lib/database.types';
+import { Vault, Role } from '@/lib/database.types';
 
 interface VaultCardProps {
   vault: Vault;
@@ -12,9 +13,13 @@ interface VaultCardProps {
   onDelete?: () => void;
   sourceCount?: number;
   fileCount?: number;
+  /** Current user's role in this vault – used to show a role badge and gate delete */
+  userRole?: Role;
 }
 
-export default function VaultCard({ vault, onClick, onDelete, sourceCount, fileCount }: VaultCardProps) {
+export default function VaultCard({ vault, onClick, onDelete, sourceCount, fileCount, userRole }: VaultCardProps) {
+  const showDelete = onDelete && userRole === 'owner';
+
   return (
     <Card
       className="hover:shadow-lg transition-all cursor-pointer group border-border/60 hover:border-primary/30"
@@ -33,7 +38,7 @@ export default function VaultCard({ vault, onClick, onDelete, sourceCount, fileC
               </CardDescription>
             )}
           </div>
-          {onDelete && (
+          {showDelete && (
             <Button
               variant="ghost"
               size="sm"
@@ -54,6 +59,7 @@ export default function VaultCard({ vault, onClick, onDelete, sourceCount, fileC
             <Clock className="h-3 w-3" />
             {new Date(vault.created_at).toLocaleDateString()}
           </div>
+          {userRole && <RoleBadge role={userRole} />}
           {vault.is_archived && (
             <Badge variant="secondary" className="text-[10px]">
               Archived

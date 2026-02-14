@@ -92,6 +92,22 @@ export async function POST(request: NextRequest) {
         actor_id: user.id,
         metadata: { annotation_id: data.id, source_id },
       });
+
+      // Notify vault members (excluding the annotator)
+      const { data: members } = await supabase.from('vault_members').select('user_id').eq('vault_id', source.vault_id);
+      if (members && members.length > 0) {
+        const notifRows = members
+          .filter((m) => m.user_id !== user.id)
+          .map((m) => ({
+            user_id: m.user_id,
+            vault_id: source.vault_id,
+            type: 'annotation_added',
+            title: 'New annotation',
+            message: `A new annotation was added to a source`,
+            metadata: { vault_id: source.vault_id, source_id, annotation_id: data.id },
+          }));
+        if (notifRows.length > 0) await supabase.from('notifications').insert(notifRows);
+      }
     }
 
     return NextResponse.json({ data }, { status: 201 });

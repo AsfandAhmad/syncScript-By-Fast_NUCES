@@ -64,6 +64,20 @@ export interface ActivityLog {
   timestamp: string;
 }
 
+export type NotificationType = 'member_added' | 'source_added' | 'annotation_added' | 'file_uploaded';
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  vault_id?: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  read: boolean;
+  metadata: Record<string, any>;
+  created_at: string;
+}
+
 export interface User {
   id: string;
   email: string;

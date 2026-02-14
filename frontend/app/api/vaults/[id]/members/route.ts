@@ -77,6 +77,17 @@ export async function POST(
       metadata: { member_user_id: user_id, role },
     });
 
+    // Notify added member
+    const { data: vault } = await supabase.from('vaults').select('name').eq('id', vaultId).single();
+    await supabase.from('notifications').insert({
+      user_id: user_id,
+      vault_id: vaultId,
+      type: 'member_added',
+      title: 'Added to vault',
+      message: `You've been added as ${role} to "${vault?.name || 'a vault'}"`,
+      metadata: { vault_id: vaultId, role },
+    });
+
     return NextResponse.json({ data }, { status: 201 });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });

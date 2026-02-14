@@ -5,77 +5,83 @@ import { useRouter } from 'next/navigation';
 import { Plus, Loader2, BookOpen, LogOut, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import VaultCard from '@/components/vault-card';
 import { VaultCardSkeleton } from '@/components/vault-card-skeleton';
+import { CreateVaultDialog } from '@/components/create-vault-dialog';
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import { NotificationCenter } from '@/components/notification-center';
 import { useAuth } from '@/hooks/use-auth';
+import { useDebounce } from '@/hooks/use-debounce';
 import { vaultService } from '@/lib/services/vault.service';
 import { toast } from 'sonner';
-import type { Vault } from '@/lib/database.types';
+import type { Vault, Role } from '@/lib/database.types';
 
 export default function DashboardPage() {
   const router = useRouter();
   const { user, signOut, loading: authLoading } = useAuth();
 
   const [vaults, setVaults] = useState<Vault[]>([]);
+  const [vaultRoles, setVaultRoles] = useState<Record<string, Role>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
 
   // Create vault dialog
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newDesc, setNewDesc] = useState('');
-  const [creating, setCreating] = useState(false);
+
+  // Delete vault confirmation
+  const [deleteVaultId, setDeleteVaultId] = useState<string | null>(null);
+  const deleteVaultName = vaults.find((v) => v.id === deleteVaultId)?.name;
 
   const fetchVaults = useCallback(async () => {
     setLoading(true);
     try {
       const result = await vaultService.getAllVaults();
       if (result.status === 'success') {
-        setVaults(result.data || []);
+        const fetchedVaults = result.data || [];
+        setVaults(fetchedVaults);
+
+        // Fetch current user's role for each vault
+        if (user?.id && fetchedVaults.length > 0) {
+          const roles: Record<string, Role> = {};
+          await Promise.all(
+            fetchedVaults.map(async (v) => {
+              try {
+                const membersRes = await vaultService.getVaultMembers(v.id);
+                if (membersRes.status === 'success' && membersRes.data) {
+                  const me = membersRes.data.find((m) => m.user_id === user.id);
+                  if (me) roles[v.id] = me.role;
+                }
+              } catch {
+                // non-critical – card simply won't show a role badge
+              }
+            })
+          );
+          setVaultRoles(roles);
+        }
       } else {
         toast.error(result.error || 'Failed to load vaults');
       }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     fetchVaults();
   }, [fetchVaults]);
 
   const handleCreateVault = async () => {
-    if (!newName.trim()) return;
-    setCreating(true);
-    try {
-      const result = await vaultService.createVault(newName.trim(), newDesc.trim() || undefined);
-      if (result.status === 'success') {
-        toast.success('Vault created!');
-        setDialogOpen(false);
-        setNewName('');
-        setNewDesc('');
-        fetchVaults();
-      } else {
-        toast.error(result.error || 'Failed to create vault');
-      }
-    } finally {
-      setCreating(false);
-    }
+    // Handled by CreateVaultDialog component - this is a no-op
   };
 
   const handleDeleteVault = async (vaultId: string) => {
-    const result = await vaultService.deleteVault(vaultId);
+    setDeleteVaultId(vaultId);
+  };
+
+  const confirmDeleteVault = async () => {
+    if (!deleteVaultId) return;
+    const result = await vaultService.deleteVault(deleteVaultId);
     if (result.status === 'success') {
       toast.success('Vault deleted');
       fetchVaults();
@@ -91,8 +97,8 @@ export default function DashboardPage() {
 
   const filteredVaults = vaults.filter(
     (v) =>
-      v.name.toLowerCase().includes(search.toLowerCase()) ||
-      v.description?.toLowerCase().includes(search.toLowerCase())
+      v.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      v.description?.toLowerCase().includes(debouncedSearch.toLowerCase())
   );
 
   return (
@@ -108,10 +114,11 @@ export default function DashboardPage() {
             <span className="hidden text-sm text-muted-foreground sm:inline">
               {user?.email}
             </span>
-            <Button variant="ghost" size="icon" onClick={() => router.push('/settings')}>
+            <NotificationCenter />
+            <Button variant="ghost" size="icon" onClick={() => router.push('/settings')} aria-label="Settings">
               <Settings className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={handleSignOut}>
+            <Button variant="ghost" size="icon" onClick={handleSignOut} aria-label="Sign out">
               <LogOut className="h-4 w-4" />
             </Button>
           </div>
@@ -129,54 +136,10 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                New Vault
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create a new vault</DialogTitle>
-                <DialogDescription>
-                  Vaults help you organize sources, annotations, and files for a research project.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-2">
-                <div className="space-y-2">
-                  <Label htmlFor="vault-name">Name</Label>
-                  <Input
-                    id="vault-name"
-                    placeholder="e.g. ML Research Paper"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    autoFocus
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="vault-desc">Description (optional)</Label>
-                  <Textarea
-                    id="vault-desc"
-                    placeholder="Brief description of this vault…"
-                    value={newDesc}
-                    onChange={(e) => setNewDesc(e.target.value)}
-                    className="resize-none"
-                    rows={3}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleCreateVault} disabled={creating || !newName.trim()}>
-                  {creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Create
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Vault
+          </Button>
         </div>
 
         {/* Search */}
@@ -212,11 +175,28 @@ export default function DashboardPage() {
                 vault={vault}
                 onClick={() => router.push(`/vault/${vault.id}`)}
                 onDelete={() => handleDeleteVault(vault.id)}
+                userRole={vaultRoles[vault.id]}
               />
             ))}
           </div>
         )}
       </main>
+
+      {/* Dialogs */}
+      <CreateVaultDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onVaultCreated={fetchVaults}
+      />
+
+      <ConfirmDialog
+        open={!!deleteVaultId}
+        onOpenChange={(v) => { if (!v) setDeleteVaultId(null); }}
+        title="Delete vault?"
+        description={`This will permanently delete "${deleteVaultName || 'this vault'}" and all its contents. This action cannot be undone.`}
+        actionLabel="Delete Vault"
+        onConfirm={confirmDeleteVault}
+      />
     </div>
   );
 }
