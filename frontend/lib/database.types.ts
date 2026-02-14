@@ -80,3 +80,51 @@ export interface PaginatedResponse<T> {
   nextCursor?: string;
   error: string | null;
 }
+
+// Extended types for UI display (joins DB data with computed fields)
+export interface VaultWithMeta extends Vault {
+  member_count?: number;
+  source_count?: number;
+  file_count?: number;
+  user_role?: 'owner' | 'contributor' | 'viewer';
+}
+
+export interface SourceWithAnnotations extends Source {
+  annotation_count?: number;
+}
+
+export interface AnnotationWithAuthor extends Annotation {
+  author_email?: string;
+  author_name?: string;
+}
+
+export interface ActivityLogWithActor extends ActivityLog {
+  actor_email?: string;
+  actor_name?: string;
+}
+
+export interface FileWithUploader extends File {
+  uploader_email?: string;
+  uploader_name?: string;
+}
+
+export interface Profile {
+  id: string;
+  email: string;
+  display_name?: string;
+  avatar_url?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  vault_id: string;
+  type: string;
+  title: string;
+  message?: string;
+  metadata: Record<string, any>;
+  is_read: boolean;
+  created_at: string;
+}

@@ -37,7 +37,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center p-4">
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="space-y-2">
           <div className="flex items-center justify-center mb-4">
@@ -122,93 +122,4 @@ export default function LoginPage() {
       </Card>
     </div>
   );
-}
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {isRegister
-                ? "Start collaborating with your research team."
-                : "Sign in to continue to your workspace."}
-            </p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-            {isRegister && (
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="name" className="text-sm font-medium text-foreground">
-                  Full Name
-                </Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="name"
-                    placeholder="Dr. Jane Smith"
-                    className="pl-10"
-                    required
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="email" className="text-sm font-medium text-foreground">
-                Email
-              </Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="jane@university.edu"
-                  className="pl-10"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="password" className="text-sm font-medium text-foreground">
-                Password
-              </Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Enter your password"
-                  className="pl-10"
-                  required
-                />
-              </div>
-            </div>
-
-            <Button type="submit" disabled={isLoading} className="mt-1 gap-2">
-              {isLoading ? (
-                <span className="flex items-center gap-2">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                  {isRegister ? "Creating account..." : "Signing in..."}
-                </span>
-              ) : (
-                <>
-                  {isRegister ? "Create Account" : "Sign In"}
-                  <ArrowRight className="h-4 w-4" />
-                </>
-              )}
-            </Button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <button
-              type="button"
-              onClick={() => setIsRegister(!isRegister)}
-              className="text-sm text-muted-foreground transition-colors hover:text-primary"
-            >
-              {isRegister
-                ? "Already have an account? Sign in"
-                : "Need an account? Create one"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
 }

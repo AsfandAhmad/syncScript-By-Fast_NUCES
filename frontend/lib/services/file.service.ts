@@ -1,6 +1,5 @@
 import supabase from '../supabase-client';
 import { File as DBFile, ApiResponse } from '../database.types';
-import crypto from 'crypto';
 
 /**
  * File Management Services
@@ -10,10 +9,13 @@ import crypto from 'crypto';
 export const fileService = {
   /**
    * Calculate SHA-256 checksum for file integrity verification
+   * Uses browser-native crypto.subtle API
    */
-  calculateChecksum(file: globalThis.File): string {
-    const hash = crypto.createHash('sha256');
-    return hash.digest('hex');
+  async calculateChecksum(file: globalThis.File): Promise<string> {
+    const buffer = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   },
 
   /**

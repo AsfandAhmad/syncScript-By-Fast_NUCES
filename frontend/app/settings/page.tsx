@@ -2,21 +2,28 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, Loader2, ArrowLeft, LogOut } from 'lucide-react';
+import { AlertCircle, Loader2, ArrowLeft, LogOut, Sun, Moon, Monitor } from 'lucide-react';
 
 export default function SettingsPage() {
   const router = useRouter();
   const { user, signOut } = useAuth();
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -59,9 +66,9 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
       {/* Header */}
-      <div className="bg-white border-b">
+      <div className="bg-white dark:bg-slate-900 border-b dark:border-slate-800">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button
@@ -73,12 +80,12 @@ export default function SettingsPage() {
               <ArrowLeft className="h-4 w-4" />
               Back
             </Button>
-            <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Settings</h1>
           </div>
           <Button
             variant="outline"
             onClick={handleSignOut}
-            className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+            className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950"
           >
             <LogOut className="h-4 w-4" />
             Sign Out
@@ -156,7 +163,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* Account Security Card */}
-        <Card>
+        <Card className="mb-6">
           <CardHeader>
             <CardTitle>Account Security</CardTitle>
             <CardDescription>
@@ -172,9 +179,49 @@ export default function SettingsPage() {
               Change Password
             </Button>
 
-            <p className="text-xs text-gray-500 mt-4">
+            <p className="text-xs text-muted-foreground mt-4">
               Account created: {new Date(user.created_at).toLocaleDateString()}
             </p>
+          </CardContent>
+        </Card>
+
+        {/* Appearance Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Appearance</CardTitle>
+            <CardDescription>
+              Customize how SyncScript looks on your device
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {mounted && (
+              <div className="grid grid-cols-3 gap-3">
+                <Button
+                  variant={theme === 'light' ? 'default' : 'outline'}
+                  onClick={() => setTheme('light')}
+                  className="flex flex-col items-center gap-2 h-auto py-4"
+                >
+                  <Sun className="h-5 w-5" />
+                  <span className="text-sm">Light</span>
+                </Button>
+                <Button
+                  variant={theme === 'dark' ? 'default' : 'outline'}
+                  onClick={() => setTheme('dark')}
+                  className="flex flex-col items-center gap-2 h-auto py-4"
+                >
+                  <Moon className="h-5 w-5" />
+                  <span className="text-sm">Dark</span>
+                </Button>
+                <Button
+                  variant={theme === 'system' ? 'default' : 'outline'}
+                  onClick={() => setTheme('system')}
+                  className="flex flex-col items-center gap-2 h-auto py-4"
+                >
+                  <Monitor className="h-5 w-5" />
+                  <span className="text-sm">System</span>
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

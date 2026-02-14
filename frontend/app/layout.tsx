@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter, Source_Serif_4 } from 'next/font/google'
 import { Toaster } from 'sonner'
+import { ThemeProvider } from '@/components/theme-provider'
 
 import './globals.css'
 
@@ -31,10 +32,17 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${sourceSerif.variable}`}>
+    <html lang="en" className={`${inter.variable} ${sourceSerif.variable}`} suppressHydrationWarning>
       <body className="font-sans antialiased">
-        {children}
-        <Toaster position="bottom-right" richColors />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+          <Toaster position="bottom-right" richColors />
+        </ThemeProvider>
       </body>
     </html>
   )
