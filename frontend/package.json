@@ -6,7 +6,8 @@
     "dev": "next dev --turbo",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "seed": "ts-node -O '{\"module\":\"commonjs\"}' scripts/seed.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.35.0",
