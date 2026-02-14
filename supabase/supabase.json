@@ -1,0 +1,28 @@
+{
+  "project_id": "YOUR_PROJECT_ID",
+  "db_url": "postgresql://postgres:YOUR_PASSWORD@db.YOUR_PROJECT_ID.supabase.co:5432/postgres",
+  "api_url": "https://YOUR_PROJECT_ID.supabase.co",
+  "graphql_url": "https://YOUR_PROJECT_ID.supabase.co/graphql/v1",
+  "jwt_secret": "YOUR_JWT_SECRET",
+  "anon_key": "YOUR_ANON_KEY",
+  "service_role_key": "YOUR_SERVICE_ROLE_KEY",
+  "functions": [
+    {
+      "slug": "auto-citation",
+      "path": "supabase/functions/auto-citation"
+    },
+    {
+      "slug": "activity-logger",
+      "path": "supabase/functions/activity-logger"
+    }
+  ],
+  "storage_buckets": [
+    {
+      "id": "vault-files",
+      "name": "vault-files",
+      "public": false,
+      "file_size_limit": 52428800,
+      "allowed_mime_types": ["application/pdf"]
+    }
+  ]
+}

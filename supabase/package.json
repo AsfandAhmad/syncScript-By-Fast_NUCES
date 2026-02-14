@@ -1,0 +1,21 @@
+{
+  "name": "syncscript-backend",
+  "version": "1.0.0",
+  "description": "SyncScript - Collaborative Research & Citation Engine Backend",
+  "type": "module",
+  "scripts": {
+    "db:push": "supabase db push",
+    "db:pull": "supabase db pull",
+    "functions:deploy": "supabase functions deploy",
+    "functions:logs": "supabase functions list",
+    "start": "supabase start",
+    "stop": "supabase stop",
+    "reset": "supabase db reset"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.35.0"
+  },
+  "devDependencies": {
+    "supabase": "^1.100.0"
+  }
+}
