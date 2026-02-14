@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getAuthUser, unauthorizedResponse } from '@/lib/api-auth';
 
 /**
- * GET /api/vaults/[id]/members – list members of a vault
+ * GET /api/sources/[id] – get a specific source
  */
 export async function GET(
   request: NextRequest,
@@ -15,13 +15,14 @@ export async function GET(
       return unauthorizedResponse(authError || undefined);
     }
 
-    const { id: vaultId } = await params;
+    const { id: sourceId } = await params;
     const supabase = createServerSupabaseClient();
 
     const { data, error } = await supabase
-      .from('vault_members')
+      .from('sources')
       .select('*')
-      .eq('vault_id', vaultId);
+      .eq('id', sourceId)
+      .single();
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -34,9 +35,9 @@ export async function GET(
 }
 
 /**
- * POST /api/vaults/[id]/members – add a member to a vault
+ * PATCH /api/sources/[id] – update a source
  */
-export async function POST(
+export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -46,22 +47,29 @@ export async function POST(
       return unauthorizedResponse(authError || undefined);
     }
 
-    const { id: vaultId } = await params;
+    const { id: sourceId } = await params;
     const supabase = createServerSupabaseClient();
     const body = await request.json();
 
-    const { user_id, role } = body;
+    // Get current version for optimistic locking
+    const { data: currentSource } = await supabase
+      .from('sources')
+      .select('version, vault_id')
+      .eq('id', sourceId)
+      .single();
 
-    if (!user_id || !role) {
-      return NextResponse.json(
-        { error: 'user_id and role are required' },
-        { status: 400 }
-      );
+    if (!currentSource) {
+      return NextResponse.json({ error: 'Source not found' }, { status: 404 });
     }
 
     const { data, error } = await supabase
-      .from('vault_members')
-      .insert({ vault_id: vaultId, user_id, role })
+      .from('sources')
+      .update({
+        ...body,
+        version: (currentSource.version || 1) + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', sourceId)
       .select()
       .single();
 
@@ -71,20 +79,20 @@ export async function POST(
 
     // Log activity
     await supabase.from('activity_logs').insert({
-      vault_id: vaultId,
-      action_type: 'member_added',
+      vault_id: currentSource.vault_id,
+      action_type: 'source_updated',
       actor_id: user.id,
-      metadata: { member_user_id: user_id, role },
+      metadata: { source_id: sourceId },
     });
 
-    return NextResponse.json({ data }, { status: 201 });
+    return NextResponse.json({ data });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
 
 /**
- * DELETE /api/vaults/[id]/members – remove a member from a vault
+ * DELETE /api/sources/[id] – delete a source
  */
 export async function DELETE(
   request: NextRequest,
@@ -96,32 +104,31 @@ export async function DELETE(
       return unauthorizedResponse(authError || undefined);
     }
 
-    const { id: vaultId } = await params;
+    const { id: sourceId } = await params;
     const supabase = createServerSupabaseClient();
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('user_id');
 
-    if (!userId) {
-      return NextResponse.json({ error: 'user_id is required' }, { status: 400 });
-    }
+    // Get vault_id for activity log before deleting
+    const { data: source } = await supabase
+      .from('sources')
+      .select('vault_id')
+      .eq('id', sourceId)
+      .single();
 
-    const { error } = await supabase
-      .from('vault_members')
-      .delete()
-      .eq('vault_id', vaultId)
-      .eq('user_id', userId);
+    const { error } = await supabase.from('sources').delete().eq('id', sourceId);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     // Log activity
-    await supabase.from('activity_logs').insert({
-      vault_id: vaultId,
-      action_type: 'member_removed',
-      actor_id: user.id,
-      metadata: { member_user_id: userId },
-    });
+    if (source) {
+      await supabase.from('activity_logs').insert({
+        vault_id: source.vault_id,
+        action_type: 'source_deleted',
+        actor_id: user.id,
+        metadata: { source_id: sourceId },
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {

@@ -2,24 +2,41 @@ import supabase from '../supabase-client';
 import { Vault, VaultMember, ApiResponse } from '../database.types';
 
 /**
- * Vault Management Services
+ * Helper to get the current user's access token for API requests
  */
+async function getAuthHeaders(): Promise<HeadersInit> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${session?.access_token || ''}`,
+  };
+}
 
+/**
+ * Vault Management Services
+ * All requests go through Next.js API routes (which use service_role to bypass RLS)
+ */
 export const vaultService = {
   /**
    * Get all vaults for the current user
    */
   async getAllVaults(): Promise<ApiResponse<Vault[]>> {
     try {
-      const { data, error } = await supabase
-        .from('vaults')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const headers = await getAuthHeaders();
+      const response = await fetch('/api/vaults', { headers });
 
-      if (error) {
-        return { data: null, error: error.message, status: 'error' };
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return {
+          data: null,
+          error: body.error || `Request failed (${response.status})`,
+          status: 'error',
+        };
       }
 
+      const { data } = await response.json();
       return { data: data || [], error: null, status: 'success' };
     } catch (err) {
       return { data: null, error: String(err), status: 'error' };
@@ -31,17 +48,22 @@ export const vaultService = {
    */
   async getVaultById(vaultId: string): Promise<ApiResponse<Vault>> {
     try {
-      const { data, error } = await supabase
-        .from('vaults')
-        .select('*')
-        .eq('id', vaultId)
-        .single();
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/vaults?id=${vaultId}`, { headers });
 
-      if (error) {
-        return { data: null, error: error.message, status: 'error' };
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return {
+          data: null,
+          error: body.error || `Request failed (${response.status})`,
+          status: 'error',
+        };
       }
 
-      return { data, error: null, status: 'success' };
+      const { data } = await response.json();
+      // If we get an array, find the specific vault
+      const vault = Array.isArray(data) ? data.find((v: Vault) => v.id === vaultId) : data;
+      return { data: vault || null, error: null, status: 'success' };
     } catch (err) {
       return { data: null, error: String(err), status: 'error' };
     }
@@ -52,33 +74,23 @@ export const vaultService = {
    */
   async createVault(name: string, description?: string): Promise<ApiResponse<Vault>> {
     try {
-      const { data: user } = await supabase.auth.getUser();
-
-      if (!user.user) {
-        return { data: null, error: 'User not authenticated', status: 'error' };
-      }
-
-      const { data, error } = await supabase
-        .from('vaults')
-        .insert({
-          name,
-          description,
-          owner_id: user.user.id,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        return { data: null, error: error.message, status: 'error' };
-      }
-
-      // Automatically add creator as owner in vault_members
-      await supabase.from('vault_members').insert({
-        vault_id: data.id,
-        user_id: user.user.id,
-        role: 'owner',
+      const headers = await getAuthHeaders();
+      const response = await fetch('/api/vaults', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name, description }),
       });
 
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return {
+          data: null,
+          error: body.error || `Request failed (${response.status})`,
+          status: 'error',
+        };
+      }
+
+      const { data } = await response.json();
       return { data, error: null, status: 'success' };
     } catch (err) {
       return { data: null, error: String(err), status: 'error' };
@@ -93,20 +105,23 @@ export const vaultService = {
     updates: Partial<Vault>
   ): Promise<ApiResponse<Vault>> {
     try {
-      const { data, error } = await supabase
-        .from('vaults')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', vaultId)
-        .select()
-        .single();
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/vaults?id=${vaultId}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(updates),
+      });
 
-      if (error) {
-        return { data: null, error: error.message, status: 'error' };
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return {
+          data: null,
+          error: body.error || `Request failed (${response.status})`,
+          status: 'error',
+        };
       }
 
+      const { data } = await response.json();
       return { data, error: null, status: 'success' };
     } catch (err) {
       return { data: null, error: String(err), status: 'error' };
@@ -118,10 +133,19 @@ export const vaultService = {
    */
   async deleteVault(vaultId: string): Promise<ApiResponse<null>> {
     try {
-      const { error } = await supabase.from('vaults').delete().eq('id', vaultId);
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/vaults?id=${vaultId}`, {
+        method: 'DELETE',
+        headers,
+      });
 
-      if (error) {
-        return { data: null, error: error.message, status: 'error' };
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return {
+          data: null,
+          error: body.error || `Request failed (${response.status})`,
+          status: 'error',
+        };
       }
 
       return { data: null, error: null, status: 'success' };
@@ -135,15 +159,19 @@ export const vaultService = {
    */
   async getVaultMembers(vaultId: string): Promise<ApiResponse<VaultMember[]>> {
     try {
-      const { data, error } = await supabase
-        .from('vault_members')
-        .select('*')
-        .eq('vault_id', vaultId);
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/vaults/${vaultId}/members`, { headers });
 
-      if (error) {
-        return { data: null, error: error.message, status: 'error' };
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return {
+          data: null,
+          error: body.error || `Request failed (${response.status})`,
+          status: 'error',
+        };
       }
 
+      const { data } = await response.json();
       return { data: data || [], error: null, status: 'success' };
     } catch (err) {
       return { data: null, error: String(err), status: 'error' };
@@ -159,20 +187,23 @@ export const vaultService = {
     role: 'owner' | 'contributor' | 'viewer'
   ): Promise<ApiResponse<VaultMember>> {
     try {
-      const { data, error } = await supabase
-        .from('vault_members')
-        .insert({
-          vault_id: vaultId,
-          user_id: userId,
-          role,
-        })
-        .select()
-        .single();
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/vaults/${vaultId}/members`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ user_id: userId, role }),
+      });
 
-      if (error) {
-        return { data: null, error: error.message, status: 'error' };
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return {
+          data: null,
+          error: body.error || `Request failed (${response.status})`,
+          status: 'error',
+        };
       }
 
+      const { data } = await response.json();
       return { data, error: null, status: 'success' };
     } catch (err) {
       return { data: null, error: String(err), status: 'error' };
@@ -188,18 +219,23 @@ export const vaultService = {
     newRole: 'owner' | 'contributor' | 'viewer'
   ): Promise<ApiResponse<VaultMember>> {
     try {
-      const { data, error } = await supabase
-        .from('vault_members')
-        .update({ role: newRole })
-        .eq('vault_id', vaultId)
-        .eq('user_id', userId)
-        .select()
-        .single();
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/vaults/${vaultId}/members`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ user_id: userId, role: newRole }),
+      });
 
-      if (error) {
-        return { data: null, error: error.message, status: 'error' };
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return {
+          data: null,
+          error: body.error || `Request failed (${response.status})`,
+          status: 'error',
+        };
       }
 
+      const { data } = await response.json();
       return { data, error: null, status: 'success' };
     } catch (err) {
       return { data: null, error: String(err), status: 'error' };
@@ -211,29 +247,19 @@ export const vaultService = {
    */
   async removeVaultMember(vaultId: string, userId: string): Promise<ApiResponse<null>> {
     try {
-      // Check if this is the last owner
-      const { data: members } = await supabase
-        .from('vault_members')
-        .select('*')
-        .eq('vault_id', vaultId)
-        .eq('role', 'owner');
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/vaults/${vaultId}/members?user_id=${userId}`, {
+        method: 'DELETE',
+        headers,
+      });
 
-      if (members && members.length === 1 && members[0].user_id === userId) {
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
         return {
           data: null,
-          error: 'Cannot remove the last owner from vault',
+          error: body.error || `Request failed (${response.status})`,
           status: 'error',
         };
-      }
-
-      const { error } = await supabase
-        .from('vault_members')
-        .delete()
-        .eq('vault_id', vaultId)
-        .eq('user_id', userId);
-
-      if (error) {
-        return { data: null, error: error.message, status: 'error' };
       }
 
       return { data: null, error: null, status: 'success' };

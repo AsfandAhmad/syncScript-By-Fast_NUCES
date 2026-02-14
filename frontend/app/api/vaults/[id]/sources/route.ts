@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { getAuthUser, unauthorizedResponse } from '@/lib/api-auth';
 
 /**
  * GET /api/vaults/[id]/sources – list sources for a vault
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user, error: authError } = await getAuthUser(request);
+    if (authError || !user) {
+      return unauthorizedResponse(authError || undefined);
+    }
+
     const { id: vaultId } = await params;
     const supabase = createServerSupabaseClient();
 
@@ -36,6 +42,11 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user, error: authError } = await getAuthUser(request);
+    if (authError || !user) {
+      return unauthorizedResponse(authError || undefined);
+    }
+
     const { id: vaultId } = await params;
     const supabase = createServerSupabaseClient();
     const body = await request.json();
@@ -46,8 +57,6 @@ export async function POST(
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     }
 
-    const { data: userData } = await supabase.auth.getUser();
-
     const { data, error } = await supabase
       .from('sources')
       .insert({
@@ -55,7 +64,7 @@ export async function POST(
         url,
         title: title || 'Untitled Source',
         metadata: metadata || {},
-        created_by: userData.user?.id,
+        created_by: user.id,
       })
       .select()
       .single();
@@ -68,7 +77,7 @@ export async function POST(
     await supabase.from('activity_logs').insert({
       vault_id: vaultId,
       action_type: 'source_created',
-      actor_id: userData.user?.id,
+      actor_id: user.id,
       metadata: { source_id: data.id, title: data.title },
     });
 

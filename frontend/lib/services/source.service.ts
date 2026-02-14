@@ -2,7 +2,21 @@ import supabase from '../supabase-client';
 import { Source, ApiResponse, PaginatedResponse } from '../database.types';
 
 /**
+ * Helper to get the current user's access token for API requests
+ */
+async function getAuthHeaders(): Promise<HeadersInit> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${session?.access_token || ''}`,
+  };
+}
+
+/**
  * Source Management Services
+ * All requests go through Next.js API routes (which use service_role to bypass RLS)
  */
 
 export const sourceService = {
@@ -15,33 +29,19 @@ export const sourceService = {
     offset: number = 0
   ): Promise<PaginatedResponse<Source>> {
     try {
-      // Get total count
-      const { count, error: countError } = await supabase
-        .from('sources')
-        .select('*', { count: 'exact', head: true })
-        .eq('vault_id', vaultId);
+      const headers = await getAuthHeaders();
+      const response = await fetch(
+        `/api/vaults/${vaultId}/sources?limit=${limit}&offset=${offset}`,
+        { headers }
+      );
 
-      if (countError) {
-        return { data: [], count: 0, error: countError.message };
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return { data: [], count: 0, error: body.error || `Request failed (${response.status})` };
       }
 
-      // Get paginated data
-      const { data, error } = await supabase
-        .from('sources')
-        .select('*')
-        .eq('vault_id', vaultId)
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1);
-
-      if (error) {
-        return { data: [], count: 0, error: error.message };
-      }
-
-      return {
-        data: data || [],
-        count: count || 0,
-        error: null,
-      };
+      const { data, count } = await response.json();
+      return { data: data || [], count: count || 0, error: null };
     } catch (err) {
       return { data: [], count: 0, error: String(err) };
     }
@@ -52,16 +52,15 @@ export const sourceService = {
    */
   async getSourceById(sourceId: string): Promise<ApiResponse<Source>> {
     try {
-      const { data, error } = await supabase
-        .from('sources')
-        .select('*')
-        .eq('id', sourceId)
-        .single();
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/sources/${sourceId}`, { headers });
 
-      if (error) {
-        return { data: null, error: error.message, status: 'error' };
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return { data: null, error: body.error || `Request failed (${response.status})`, status: 'error' };
       }
 
+      const { data } = await response.json();
       return { data, error: null, status: 'success' };
     } catch (err) {
       return { data: null, error: String(err), status: 'error' };
@@ -69,7 +68,7 @@ export const sourceService = {
   },
 
   /**
-   * Create a new source (with optional auto-citation)
+   * Create a new source
    */
   async createSource(
     vaultId: string,
@@ -78,36 +77,19 @@ export const sourceService = {
     metadata?: Record<string, any>
   ): Promise<ApiResponse<Source>> {
     try {
-      const { data: user } = await supabase.auth.getUser();
-
-      if (!user.user) {
-        return { data: null, error: 'User not authenticated', status: 'error' };
-      }
-
-      const { data, error } = await supabase
-        .from('sources')
-        .insert({
-          vault_id: vaultId,
-          url,
-          title: title || 'Untitled Source',
-          metadata: metadata || {},
-          created_by: user.user.id,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        return { data: null, error: error.message, status: 'error' };
-      }
-
-      // Log activity
-      await supabase.from('activity_logs').insert({
-        vault_id: vaultId,
-        action_type: 'source_created',
-        actor_id: user.user.id,
-        metadata: { source_id: data.id, title: data.title },
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/vaults/${vaultId}/sources`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ url, title, metadata }),
       });
 
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return { data: null, error: body.error || `Request failed (${response.status})`, status: 'error' };
+      }
+
+      const { data } = await response.json();
       return { data, error: null, status: 'success' };
     } catch (err) {
       return { data: null, error: String(err), status: 'error' };
@@ -122,41 +104,19 @@ export const sourceService = {
     updates: Partial<Source>
   ): Promise<ApiResponse<Source>> {
     try {
-      // Get the current version for optimistic locking
-      const { data: currentSource } = await supabase
-        .from('sources')
-        .select('version, vault_id')
-        .eq('id', sourceId)
-        .single();
-
-      if (!currentSource) {
-        return { data: null, error: 'Source not found', status: 'error' };
-      }
-
-      const { data, error } = await supabase
-        .from('sources')
-        .update({
-          ...updates,
-          version: (currentSource.version || 1) + 1,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', sourceId)
-        .select()
-        .single();
-
-      if (error) {
-        return { data: null, error: error.message, status: 'error' };
-      }
-
-      // Log activity
-      const { data: user } = await supabase.auth.getUser();
-      await supabase.from('activity_logs').insert({
-        vault_id: currentSource.vault_id,
-        action_type: 'source_updated',
-        actor_id: user.user?.id,
-        metadata: { source_id: sourceId },
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/sources/${sourceId}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(updates),
       });
 
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return { data: null, error: body.error || `Request failed (${response.status})`, status: 'error' };
+      }
+
+      const { data } = await response.json();
       return { data, error: null, status: 'success' };
     } catch (err) {
       return { data: null, error: String(err), status: 'error' };
@@ -168,27 +128,15 @@ export const sourceService = {
    */
   async deleteSource(sourceId: string): Promise<ApiResponse<null>> {
     try {
-      const { data: source } = await supabase
-        .from('sources')
-        .select('vault_id')
-        .eq('id', sourceId)
-        .single();
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/sources/${sourceId}`, {
+        method: 'DELETE',
+        headers,
+      });
 
-      const { error } = await supabase.from('sources').delete().eq('id', sourceId);
-
-      if (error) {
-        return { data: null, error: error.message, status: 'error' };
-      }
-
-      // Log activity
-      const { data: user } = await supabase.auth.getUser();
-      if (source) {
-        await supabase.from('activity_logs').insert({
-          vault_id: source.vault_id,
-          action_type: 'source_deleted',
-          actor_id: user.user?.id,
-          metadata: { source_id: sourceId },
-        });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return { data: null, error: body.error || `Request failed (${response.status})`, status: 'error' };
       }
 
       return { data: null, error: null, status: 'success' };

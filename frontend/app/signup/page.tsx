@@ -2,24 +2,20 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { BookOpen, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
 
 export default function SignupPage() {
-  const router = useRouter();
-  const { signUp, error: authError } = useAuth();
-
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,14 +28,24 @@ export default function SignupPage() {
       return;
     }
 
+    setError('');
     setLoading(true);
     try {
-      const result = await signUp(email, password, fullName);
-      if (result) {
-        toast.success('Account created! Check your email for confirmation.');
-        router.push('/login');
+      // Create account via server API (auto-confirms email)
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, fullName }),
+      });
+      const result = await response.json();
+
+      if (response.ok && result.user) {
+        toast.success('Account created! Redirecting to login...');
+        window.location.href = '/login';
       } else {
-        toast.error(authError || 'Failed to create account');
+        const msg = result.error || 'Failed to create account';
+        setError(msg);
+        toast.error(msg);
       }
     } finally {
       setLoading(false);
@@ -104,8 +110,8 @@ export default function SignupPage() {
               />
             </div>
 
-            {authError && (
-              <p className="text-sm text-destructive">{authError}</p>
+            {error && (
+              <p className="text-sm text-destructive">{error}</p>
             )}
           </CardContent>
 

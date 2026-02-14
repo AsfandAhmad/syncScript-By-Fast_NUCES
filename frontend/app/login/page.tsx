@@ -31,7 +31,7 @@ export default function LoginPage() {
       const result = await signIn(email, password);
       if (result) {
         toast.success('Signed in successfully');
-        router.push(redirect);
+        window.location.href = redirect;
       } else {
         toast.error(authError || 'Invalid credentials');
       }

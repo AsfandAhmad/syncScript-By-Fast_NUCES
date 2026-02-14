@@ -2,7 +2,21 @@ import supabase from '../supabase-client';
 import { Annotation, ApiResponse, PaginatedResponse } from '../database.types';
 
 /**
+ * Helper to get the current user's access token for API requests
+ */
+async function getAuthHeaders(): Promise<HeadersInit> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${session?.access_token || ''}`,
+  };
+}
+
+/**
  * Annotation Management Services
+ * All requests go through Next.js API routes (which use service_role to bypass RLS)
  */
 
 export const annotationService = {
@@ -15,33 +29,19 @@ export const annotationService = {
     offset: number = 0
   ): Promise<PaginatedResponse<Annotation>> {
     try {
-      // Get total count
-      const { count, error: countError } = await supabase
-        .from('annotations')
-        .select('*', { count: 'exact', head: true })
-        .eq('source_id', sourceId);
+      const headers = await getAuthHeaders();
+      const response = await fetch(
+        `/api/annotations?source_id=${sourceId}&limit=${limit}&offset=${offset}`,
+        { headers }
+      );
 
-      if (countError) {
-        return { data: [], count: 0, error: countError.message };
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return { data: [], count: 0, error: body.error || `Request failed (${response.status})` };
       }
 
-      // Get paginated data
-      const { data, error } = await supabase
-        .from('annotations')
-        .select('*')
-        .eq('source_id', sourceId)
-        .order('created_at', { ascending: true })
-        .range(offset, offset + limit - 1);
-
-      if (error) {
-        return { data: [], count: 0, error: error.message };
-      }
-
-      return {
-        data: data || [],
-        count: count || 0,
-        error: null,
-      };
+      const { data, count } = await response.json();
+      return { data: data || [], count: count || 0, error: null };
     } catch (err) {
       return { data: [], count: 0, error: String(err) };
     }
@@ -52,16 +52,15 @@ export const annotationService = {
    */
   async getAnnotationById(annotationId: string): Promise<ApiResponse<Annotation>> {
     try {
-      const { data, error } = await supabase
-        .from('annotations')
-        .select('*')
-        .eq('id', annotationId)
-        .single();
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/annotations/${annotationId}`, { headers });
 
-      if (error) {
-        return { data: null, error: error.message, status: 'error' };
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return { data: null, error: body.error || `Request failed (${response.status})`, status: 'error' };
       }
 
+      const { data } = await response.json();
       return { data, error: null, status: 'success' };
     } catch (err) {
       return { data: null, error: String(err), status: 'error' };
@@ -73,42 +72,19 @@ export const annotationService = {
    */
   async createAnnotation(sourceId: string, content: string): Promise<ApiResponse<Annotation>> {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const headers = await getAuthHeaders();
+      const response = await fetch('/api/annotations', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ source_id: sourceId, content }),
+      });
 
-      if (!user.user) {
-        return { data: null, error: 'User not authenticated', status: 'error' };
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return { data: null, error: body.error || `Request failed (${response.status})`, status: 'error' };
       }
 
-      const { data, error } = await supabase
-        .from('annotations')
-        .insert({
-          source_id: sourceId,
-          content,
-          created_by: user.user.id,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        return { data: null, error: error.message, status: 'error' };
-      }
-
-      // Log activity
-      const { data: source } = await supabase
-        .from('sources')
-        .select('vault_id')
-        .eq('id', sourceId)
-        .single();
-
-      if (source) {
-        await supabase.from('activity_logs').insert({
-          vault_id: source.vault_id,
-          action_type: 'annotation_created',
-          actor_id: user.user.id,
-          metadata: { annotation_id: data.id, source_id: sourceId },
-        });
-      }
-
+      const { data } = await response.json();
       return { data, error: null, status: 'success' };
     } catch (err) {
       return { data: null, error: String(err), status: 'error' };
@@ -116,56 +92,26 @@ export const annotationService = {
   },
 
   /**
-   * Update an annotation with optimistic locking
+   * Update an annotation
    */
   async updateAnnotation(
     annotationId: string,
     content: string
   ): Promise<ApiResponse<Annotation>> {
     try {
-      // Get current annotation for version tracking
-      const { data: currentAnnotation } = await supabase
-        .from('annotations')
-        .select('version, source_id')
-        .eq('id', annotationId)
-        .single();
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/annotations/${annotationId}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ content }),
+      });
 
-      if (!currentAnnotation) {
-        return { data: null, error: 'Annotation not found', status: 'error' };
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return { data: null, error: body.error || `Request failed (${response.status})`, status: 'error' };
       }
 
-      const { data, error } = await supabase
-        .from('annotations')
-        .update({
-          content,
-          version: (currentAnnotation.version || 1) + 1,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', annotationId)
-        .select()
-        .single();
-
-      if (error) {
-        return { data: null, error: error.message, status: 'error' };
-      }
-
-      // Log activity
-      const { data: user } = await supabase.auth.getUser();
-      const { data: source } = await supabase
-        .from('sources')
-        .select('vault_id')
-        .eq('id', currentAnnotation.source_id)
-        .single();
-
-      if (source) {
-        await supabase.from('activity_logs').insert({
-          vault_id: source.vault_id,
-          action_type: 'annotation_updated',
-          actor_id: user.user?.id,
-          metadata: { annotation_id: annotationId },
-        });
-      }
-
+      const { data } = await response.json();
       return { data, error: null, status: 'success' };
     } catch (err) {
       return { data: null, error: String(err), status: 'error' };
@@ -177,35 +123,15 @@ export const annotationService = {
    */
   async deleteAnnotation(annotationId: string): Promise<ApiResponse<null>> {
     try {
-      const { data: annotation } = await supabase
-        .from('annotations')
-        .select('source_id')
-        .eq('id', annotationId)
-        .single();
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/annotations/${annotationId}`, {
+        method: 'DELETE',
+        headers,
+      });
 
-      const { error } = await supabase.from('annotations').delete().eq('id', annotationId);
-
-      if (error) {
-        return { data: null, error: error.message, status: 'error' };
-      }
-
-      // Log activity
-      const { data: user } = await supabase.auth.getUser();
-      if (annotation) {
-        const { data: source } = await supabase
-          .from('sources')
-          .select('vault_id')
-          .eq('id', annotation.source_id)
-          .single();
-
-        if (source) {
-          await supabase.from('activity_logs').insert({
-            vault_id: source.vault_id,
-            action_type: 'annotation_deleted',
-            actor_id: user.user?.id,
-            metadata: { annotation_id: annotationId },
-          });
-        }
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return { data: null, error: body.error || `Request failed (${response.status})`, status: 'error' };
       }
 
       return { data: null, error: null, status: 'success' };

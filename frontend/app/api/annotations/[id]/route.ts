@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getAuthUser, unauthorizedResponse } from '@/lib/api-auth';
 
 /**
- * GET /api/vaults/[id]/members – list members of a vault
+ * GET /api/annotations/[id] – get a specific annotation
  */
 export async function GET(
   request: NextRequest,
@@ -15,13 +15,14 @@ export async function GET(
       return unauthorizedResponse(authError || undefined);
     }
 
-    const { id: vaultId } = await params;
+    const { id: annotationId } = await params;
     const supabase = createServerSupabaseClient();
 
     const { data, error } = await supabase
-      .from('vault_members')
+      .from('annotations')
       .select('*')
-      .eq('vault_id', vaultId);
+      .eq('id', annotationId)
+      .single();
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -34,9 +35,9 @@ export async function GET(
 }
 
 /**
- * POST /api/vaults/[id]/members – add a member to a vault
+ * PATCH /api/annotations/[id] – update an annotation
  */
-export async function POST(
+export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -46,22 +47,29 @@ export async function POST(
       return unauthorizedResponse(authError || undefined);
     }
 
-    const { id: vaultId } = await params;
+    const { id: annotationId } = await params;
     const supabase = createServerSupabaseClient();
     const body = await request.json();
 
-    const { user_id, role } = body;
+    // Get current version
+    const { data: current } = await supabase
+      .from('annotations')
+      .select('version, source_id')
+      .eq('id', annotationId)
+      .single();
 
-    if (!user_id || !role) {
-      return NextResponse.json(
-        { error: 'user_id and role are required' },
-        { status: 400 }
-      );
+    if (!current) {
+      return NextResponse.json({ error: 'Annotation not found' }, { status: 404 });
     }
 
     const { data, error } = await supabase
-      .from('vault_members')
-      .insert({ vault_id: vaultId, user_id, role })
+      .from('annotations')
+      .update({
+        content: body.content,
+        version: (current.version || 1) + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', annotationId)
       .select()
       .single();
 
@@ -70,21 +78,29 @@ export async function POST(
     }
 
     // Log activity
-    await supabase.from('activity_logs').insert({
-      vault_id: vaultId,
-      action_type: 'member_added',
-      actor_id: user.id,
-      metadata: { member_user_id: user_id, role },
-    });
+    const { data: source } = await supabase
+      .from('sources')
+      .select('vault_id')
+      .eq('id', current.source_id)
+      .single();
 
-    return NextResponse.json({ data }, { status: 201 });
+    if (source) {
+      await supabase.from('activity_logs').insert({
+        vault_id: source.vault_id,
+        action_type: 'annotation_updated',
+        actor_id: user.id,
+        metadata: { annotation_id: annotationId },
+      });
+    }
+
+    return NextResponse.json({ data });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
 
 /**
- * DELETE /api/vaults/[id]/members – remove a member from a vault
+ * DELETE /api/annotations/[id] – delete an annotation
  */
 export async function DELETE(
   request: NextRequest,
@@ -96,32 +112,39 @@ export async function DELETE(
       return unauthorizedResponse(authError || undefined);
     }
 
-    const { id: vaultId } = await params;
+    const { id: annotationId } = await params;
     const supabase = createServerSupabaseClient();
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('user_id');
 
-    if (!userId) {
-      return NextResponse.json({ error: 'user_id is required' }, { status: 400 });
-    }
+    // Get source info for activity log
+    const { data: annotation } = await supabase
+      .from('annotations')
+      .select('source_id')
+      .eq('id', annotationId)
+      .single();
 
-    const { error } = await supabase
-      .from('vault_members')
-      .delete()
-      .eq('vault_id', vaultId)
-      .eq('user_id', userId);
+    const { error } = await supabase.from('annotations').delete().eq('id', annotationId);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     // Log activity
-    await supabase.from('activity_logs').insert({
-      vault_id: vaultId,
-      action_type: 'member_removed',
-      actor_id: user.id,
-      metadata: { member_user_id: userId },
-    });
+    if (annotation) {
+      const { data: source } = await supabase
+        .from('sources')
+        .select('vault_id')
+        .eq('id', annotation.source_id)
+        .single();
+
+      if (source) {
+        await supabase.from('activity_logs').insert({
+          vault_id: source.vault_id,
+          action_type: 'annotation_deleted',
+          actor_id: user.id,
+          metadata: { annotation_id: annotationId },
+        });
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {

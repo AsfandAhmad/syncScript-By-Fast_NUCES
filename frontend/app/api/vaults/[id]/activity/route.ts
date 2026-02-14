@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { getAuthUser, unauthorizedResponse } from '@/lib/api-auth';
 
 /**
  * GET /api/vaults/[id]/activity – list activity logs for a vault
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user, error: authError } = await getAuthUser(request);
+    if (authError || !user) {
+      return unauthorizedResponse(authError || undefined);
+    }
+
     const { id: vaultId } = await params;
     const supabase = createServerSupabaseClient();
 

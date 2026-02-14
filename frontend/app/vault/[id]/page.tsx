@@ -35,6 +35,7 @@ import { useRealtimeSources, useRealtimeMembers, useRealtimeActivity } from '@/h
 import { vaultService } from '@/lib/services/vault.service';
 import { sourceService } from '@/lib/services/source.service';
 import { fileService } from '@/lib/services/file.service';
+import supabase from '@/lib/supabase-client';
 import { toast } from 'sonner';
 import type { Vault, Source, VaultMember, FileRecord, ActivityLog, Role } from '@/lib/database.types';
 
@@ -98,7 +99,10 @@ export default function VaultDetailPage() {
 
       // Fetch activity logs
       try {
-        const activityRes = await fetch(`/api/vaults/${vaultId}/activity`);
+        const { data: { session } } = await supabase.auth.getSession();
+        const activityRes = await fetch(`/api/vaults/${vaultId}/activity`, {
+          headers: { Authorization: `Bearer ${session?.access_token || ''}` },
+        });
         if (activityRes.ok) {
           const activityData = await activityRes.json();
           setInitialActivity(activityData.data || []);
