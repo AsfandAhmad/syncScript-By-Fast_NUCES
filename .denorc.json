@@ -1,12 +1,7 @@
 {
   "compilerOptions": {
-    "allowJs": true,
     "lib": ["deno.window"],
-    "types": ["deno.ns"],
-    "target": "esnext",
-    "module": "esnext",
-    "strict": false,
-    "skipLibCheck": true
+    "target": "esnext"
   },
   "imports": {
     "std/": "https://deno.land/std@0.168.0/",
