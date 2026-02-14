@@ -1,19 +1,19 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { realtimeService } from '@/lib/services/realtime.service';
-import { Source } from '@/lib/database.types';
+import { Source, Annotation, VaultMember, ActivityLog } from '@/lib/database.types';
 
-/**
- * Hook for real-time source updates
- */
-export function useRealtimeSources(vaultId: string) {
-  const [sources, setSources] = useState<Source[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export function useRealtimeSources(vaultId: string, initial: Source[] = []) {
+  const [sources, setSources] = useState<Source[]>(initial);
 
   useEffect(() => {
-    const unsubscribe = realtimeService.subscribeToSources(vaultId, (data) => {
+    setSources(initial);
+  }, [initial]);
+
+  useEffect(() => {
+    if (!vaultId) return;
+    const unsub = realtimeService.subscribeToSources(vaultId, (data) => {
       if (data.type === 'source_added') {
         setSources((prev) => [data.payload.new, ...prev]);
       } else if (data.type === 'source_updated') {
@@ -24,23 +24,22 @@ export function useRealtimeSources(vaultId: string) {
         setSources((prev) => prev.filter((s) => s.id !== data.payload.old.id));
       }
     });
-
-    setLoading(false);
-    return unsubscribe;
+    return unsub;
   }, [vaultId]);
 
-  return { sources, loading, error };
+  return { sources, setSources };
 }
 
-/**
- * Hook for real-time vault member updates
- */
-export function useRealtimeMembers(vaultId: string) {
-  const [members, setMembers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+export function useRealtimeMembers(vaultId: string, initial: VaultMember[] = []) {
+  const [members, setMembers] = useState<VaultMember[]>(initial);
 
   useEffect(() => {
-    const unsubscribe = realtimeService.subscribeToMembers(vaultId, (data) => {
+    setMembers(initial);
+  }, [initial]);
+
+  useEffect(() => {
+    if (!vaultId) return;
+    const unsub = realtimeService.subscribeToMembers(vaultId, (data) => {
       if (data.type === 'member_added') {
         setMembers((prev) => [...prev, data.payload.new]);
       } else if (data.type === 'member_role_changed') {
@@ -51,44 +50,42 @@ export function useRealtimeMembers(vaultId: string) {
         setMembers((prev) => prev.filter((m) => m.id !== data.payload.old.id));
       }
     });
-
-    setLoading(false);
-    return unsubscribe;
+    return unsub;
   }, [vaultId]);
 
-  return { members, loading };
+  return { members, setMembers };
 }
 
-/**
- * Hook for real-time activity feed
- */
-export function useRealtimeActivityLog(vaultId: string) {
-  const [activities, setActivities] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+export function useRealtimeActivity(vaultId: string, initial: ActivityLog[] = []) {
+  const [activities, setActivities] = useState<ActivityLog[]>(initial);
 
   useEffect(() => {
-    const unsubscribe = realtimeService.subscribeToActivityLogs(vaultId, (data) => {
+    setActivities(initial);
+  }, [initial]);
+
+  useEffect(() => {
+    if (!vaultId) return;
+    const unsub = realtimeService.subscribeToActivityLogs(vaultId, (data) => {
       if (data.type === 'activity_logged') {
         setActivities((prev) => [data.payload.new, ...prev]);
       }
     });
-
-    setLoading(false);
-    return unsubscribe;
+    return unsub;
   }, [vaultId]);
 
-  return { activities, loading };
+  return { activities, setActivities };
 }
 
-/**
- * Hook for real-time annotation updates
- */
-export function useRealtimeAnnotations(sourceId: string) {
-  const [annotations, setAnnotations] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+export function useRealtimeAnnotations(sourceId: string, initial: Annotation[] = []) {
+  const [annotations, setAnnotations] = useState<Annotation[]>(initial);
 
   useEffect(() => {
-    const unsubscribe = realtimeService.subscribeToAnnotations(sourceId, (data) => {
+    setAnnotations(initial);
+  }, [initial]);
+
+  useEffect(() => {
+    if (!sourceId) return;
+    const unsub = realtimeService.subscribeToAnnotations(sourceId, (data) => {
       if (data.type === 'annotation_added') {
         setAnnotations((prev) => [...prev, data.payload.new]);
       } else if (data.type === 'annotation_updated') {
@@ -99,10 +96,8 @@ export function useRealtimeAnnotations(sourceId: string) {
         setAnnotations((prev) => prev.filter((a) => a.id !== data.payload.old.id));
       }
     });
-
-    setLoading(false);
-    return unsubscribe;
+    return unsub;
   }, [sourceId]);
 
-  return { annotations, loading };
+  return { annotations, setAnnotations };
 }

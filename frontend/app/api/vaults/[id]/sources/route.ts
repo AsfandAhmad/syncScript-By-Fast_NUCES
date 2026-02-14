@@ -2,93 +2,78 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 /**
- * GET /api/vaults/[id]/sources
- * Get all sources for a vault
+ * GET /api/vaults/[id]/sources – list sources for a vault
  */
 export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: vaultId } = await params;
     const supabase = createServerSupabaseClient();
-    const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get('limit') || '20');
-    const offset = parseInt(searchParams.get('offset') || '0');
 
-    const { data: sources, error, count } = await supabase
+    const { data, error, count } = await supabase
       .from('sources')
       .select('*', { count: 'exact' })
-      .eq('vault_id', params.id)
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+      .eq('vault_id', vaultId)
+      .order('created_at', { ascending: false });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({
-      sources,
-      count,
-      limit,
-      offset,
-    });
-  } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    return NextResponse.json({ data, count });
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
 
 /**
- * POST /api/vaults/[id]/sources
- * Create a new source in a vault
+ * POST /api/vaults/[id]/sources – add a source to a vault
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: vaultId } = await params;
     const supabase = createServerSupabaseClient();
-    const { data } = await supabase.auth.getUser();
-    const user = data.user;
+    const body = await request.json();
 
-    if (!user || !user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { url, title, metadata } = await request.json();
+    const { url, title, metadata } = body;
 
     if (!url) {
-      return NextResponse.json(
-        { error: 'Source URL is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     }
 
-    const { data: source, error } = await supabase
+    const { data: userData } = await supabase.auth.getUser();
+
+    const { data, error } = await supabase
       .from('sources')
       .insert({
-        vault_id: params.id,
+        vault_id: vaultId,
         url,
         title: title || 'Untitled Source',
         metadata: metadata || {},
-        created_by: user.id,
+        created_by: userData.user?.id,
       })
       .select()
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     // Log activity
     await supabase.from('activity_logs').insert({
-      vault_id: params.id,
+      vault_id: vaultId,
       action_type: 'source_created',
-      actor_id: user.id,
-      metadata: { source_id: source.id, title: source.title },
+      actor_id: userData.user?.id,
+      metadata: { source_id: data.id, title: data.title },
     });
 
-    return NextResponse.json({ source }, { status: 201 });
-  } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    return NextResponse.json({ data }, { status: 201 });
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }

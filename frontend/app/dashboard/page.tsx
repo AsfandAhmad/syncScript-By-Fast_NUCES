@@ -1,83 +1,86 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/use-auth';
+import { Plus, Loader2, BookOpen, LogOut, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, Plus, Loader2, LogOut } from 'lucide-react';
-import { vaultService } from '@/lib/services/vault.service';
-import { Vault } from '@/lib/database.types';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import VaultCard from '@/components/vault-card';
+import { VaultCardSkeleton } from '@/components/vault-card-skeleton';
+import { useAuth } from '@/hooks/use-auth';
+import { vaultService } from '@/lib/services/vault.service';
+import { toast } from 'sonner';
+import type { Vault } from '@/lib/database.types';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, signOut } = useAuth();
+  const { user, signOut, loading: authLoading } = useAuth();
+
   const [vaults, setVaults] = useState<Vault[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+
+  // Create vault dialog
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newDesc, setNewDesc] = useState('');
   const [creating, setCreating] = useState(false);
-  const [newVaultName, setNewVaultName] = useState('');
-  const [showCreateForm, setShowCreateForm] = useState(false);
 
-  // Check authentication
-  useEffect(() => {
-    if (!user) {
-      router.push('/login');
-    }
-  }, [user, router]);
-
-  // Load vaults
-  useEffect(() => {
-    if (!user) return;
-
-    const loadVaults = async () => {
-      try {
-        setLoading(true);
-        const data = await vaultService.getAllVaults();
-        setVaults(data);
-        setError('');
-      } catch (err) {
-        setError('Failed to load vaults. Please try again.');
-        console.error(err);
-      } finally {
-        setLoading(false);
+  const fetchVaults = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await vaultService.getAllVaults();
+      if (result.status === 'success') {
+        setVaults(result.data || []);
+      } else {
+        toast.error(result.error || 'Failed to load vaults');
       }
-    };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-    loadVaults();
-  const handleCreateVault = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newVaultName.trim()) return;
+  useEffect(() => {
+    fetchVaults();
+  }, [fetchVaults]);
 
+  const handleCreateVault = async () => {
+    if (!newName.trim()) return;
     setCreating(true);
     try {
-      const vault = await vaultService.createVault({
-        name: newVaultName,
-        description: '',
-        isPublic: false,
-      });
-      setVaults([...vaults, vault]);
-      setNewVaultName('');
-      setShowCreateForm(false);
-      setError('');
-    } catch (err) {
-      setError('Failed to create vault. Please try again.');
-      console.error(err);
+      const result = await vaultService.createVault(newName.trim(), newDesc.trim() || undefined);
+      if (result.status === 'success') {
+        toast.success('Vault created!');
+        setDialogOpen(false);
+        setNewName('');
+        setNewDesc('');
+        fetchVaults();
+      } else {
+        toast.error(result.error || 'Failed to create vault');
+      }
     } finally {
       setCreating(false);
     }
   };
 
-  const handleDeleteVault = async (id: string) => {
-    try {
-      await vaultService.deleteVault(id);
-      setVaults(vaults.filter(v => v.id !== id));
-    } catch (err) {
-      setError('Failed to delete vault. Please try again.');
-      console.error(err);
+  const handleDeleteVault = async (vaultId: string) => {
+    const result = await vaultService.deleteVault(vaultId);
+    if (result.status === 'success') {
+      toast.success('Vault deleted');
+      fetchVaults();
+    } else {
+      toast.error(result.error || 'Failed to delete vault');
     }
   };
 
@@ -86,131 +89,134 @@ export default function DashboardPage() {
     router.push('/login');
   };
 
-  if (!user) {
-    return null;
-  }
+  const filteredVaults = vaults.filter(
+    (v) =>
+      v.name.toLowerCase().includes(search.toLowerCase()) ||
+      v.description?.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-gray-600 mt-1">Welcome, {user.email}</p>
+      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
+        <div className="container mx-auto flex h-14 items-center justify-between px-4">
+          <div className="flex items-center gap-2 font-bold text-lg">
+            <BookOpen className="h-5 w-5 text-primary" />
+            SyncScript
           </div>
-          <Button
-            variant="outline"
-            onClick={handleSignOut}
-            className="gap-2"
-          >
-            <LogOut className="h-4 w-4" />
-            Sign Out
-          </Button>
-        </div>
-      </div>
-
-      {/* Main content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {error && (
-          <Alert variant="destructive" className="mb-6">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {/* Create vault section */}
-        <div className="mb-8">
-          {!showCreateForm ? (
-            <Button
-              onClick={() => setShowCreateForm(true)}
-              className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600"
-            >
-              <Plus className="h-4 w-4" />
-              Create New Vault
+          <div className="flex items-center gap-2">
+            <span className="hidden text-sm text-muted-foreground sm:inline">
+              {user?.email}
+            </span>
+            <Button variant="ghost" size="icon" onClick={() => router.push('/settings')}>
+              <Settings className="h-4 w-4" />
             </Button>
-          ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle>Create New Vault</CardTitle>
-                <CardDescription>
-                  A vault is a container for your research sources and annotations
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleCreateVault} className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium">Vault Name</label>
-                    <Input
-                      placeholder="e.g., Climate Change Research"
-                      value={newVaultName}
-                      onChange={(e) => setNewVaultName(e.target.value)}
-                      disabled={creating}
-                      autoFocus
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      type="submit"
-                      disabled={creating || !newVaultName.trim()}
-                      className="bg-blue-600 hover:bg-blue-700"
-                    >
-                      {creating ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Creating...
-                        </>
-                      ) : (
-                        'Create Vault'
-                      )}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setShowCreateForm(false)}
-                      disabled={creating}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          )}
+            <Button variant="ghost" size="icon" onClick={handleSignOut}>
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      {/* Main */}
+      <main className="container mx-auto px-4 py-8">
+        {/* Top bar */}
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Your Vaults</h1>
+            <p className="text-sm text-muted-foreground">
+              Organize your research into collaborative vaults.
+            </p>
+          </div>
+
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                New Vault
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create a new vault</DialogTitle>
+                <DialogDescription>
+                  Vaults help you organize sources, annotations, and files for a research project.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label htmlFor="vault-name">Name</Label>
+                  <Input
+                    id="vault-name"
+                    placeholder="e.g. ML Research Paper"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="vault-desc">Description (optional)</Label>
+                  <Textarea
+                    id="vault-desc"
+                    placeholder="Brief description of this vault…"
+                    value={newDesc}
+                    onChange={(e) => setNewDesc(e.target.value)}
+                    className="resize-none"
+                    rows={3}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleCreateVault} disabled={creating || !newName.trim()}>
+                  {creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Create
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
 
-        {/* Vaults list */}
-        <div>
-          <h2 className="text-xl font-semibold mb-4">Your Vaults</h2>
-
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-            </div>
-          ) : vaults.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <p className="text-gray-600 mb-4">
-                  {showCreateForm
-                    ? 'Create a vault to get started'
-                    : 'No vaults yet. Create one to begin organizing your research.'}
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {vaults.map((vault) => (
-                <VaultCard
-                  key={vault.id}
-                  vault={vault}
-                  onDelete={() => handleDeleteVault(vault.id)}
-                  onClick={() => router.push(`/vault/${vault.id}`)}
-                />
-              ))}
-            </div>
-          )}
+        {/* Search */}
+        <div className="mb-6">
+          <Input
+            placeholder="Search vaults…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="max-w-sm"
+          />
         </div>
-      </div>
+
+        {/* Grid */}
+        {loading ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <VaultCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : filteredVaults.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
+            <BookOpen className="mb-3 h-12 w-12 text-muted-foreground/50" />
+            <h3 className="text-lg font-medium">No vaults yet</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Create your first vault to start organizing your research.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredVaults.map((vault) => (
+              <VaultCard
+                key={vault.id}
+                vault={vault}
+                onClick={() => router.push(`/vault/${vault.id}`)}
+                onDelete={() => handleDeleteVault(vault.id)}
+              />
+            ))}
+          </div>
+        )}
+      </main>
     </div>
   );
 }

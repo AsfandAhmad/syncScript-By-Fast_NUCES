@@ -2,81 +2,65 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 /**
- * GET /api/vaults
- * Get all vaults for authenticated user
+ * GET /api/vaults – list vaults for current user
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const supabase = createServerSupabaseClient();
-    const { data } = await supabase.auth.getUser();
-    const user = data.user;
 
-    if (!user || !user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { data: vaults, error } = await supabase
+    const { data, error } = await supabase
       .from('vaults')
       .select('*')
-      .or(`owner_id.eq.${user.id},vault_members.user_id.eq.${user.id}`)
       .order('created_at', { ascending: false });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ vaults });
-  } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    return NextResponse.json({ data });
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
 
 /**
- * POST /api/vaults
- * Create a new vault
+ * POST /api/vaults – create a new vault
  */
 export async function POST(request: NextRequest) {
   try {
     const supabase = createServerSupabaseClient();
-    const { data } = await supabase.auth.getUser();
-    const user = data.user;
+    const body = await request.json();
 
-    if (!user || !user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { name, description } = await request.json();
+    const { name, description } = body;
 
     if (!name) {
-      return NextResponse.json(
-        { error: 'Vault name is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
-    const { data: vault, error } = await supabase
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+
+    const { data, error } = await supabase
       .from('vaults')
-      .insert({
-        name,
-        description,
-        owner_id: user.id,
-      })
+      .insert({ name, description, owner_id: userId })
       .select()
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Add creator as owner in vault_members
-    await supabase.from('vault_members').insert({
-      vault_id: vault.id,
-      user_id: user.id,
-      role: 'owner',
-    });
+    // Add creator as owner member
+    if (userId) {
+      await supabase.from('vault_members').insert({
+        vault_id: data.id,
+        user_id: userId,
+        role: 'owner',
+      });
+    }
 
-    return NextResponse.json({ vault }, { status: 201 });
-  } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    return NextResponse.json({ data }, { status: 201 });
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
