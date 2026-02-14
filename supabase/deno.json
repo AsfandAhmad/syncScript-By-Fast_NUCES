@@ -6,7 +6,9 @@
     "target": "esnext",
     "module": "esnext",
     "strict": false,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "declaration": true,
+    "declarationDir": "./types"
   },
   "imports": {
     "std/": "https://deno.land/std@0.168.0/",

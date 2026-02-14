@@ -1,5 +1,6 @@
 import supabase from '../supabase-client';
 import { Vault, Source, Annotation, VaultMember } from '../database.types';
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 /**
  * Real-Time Collaboration Service
@@ -22,14 +23,14 @@ export const realtimeService = {
     const channel = supabase
       .channel(`vault:${vaultId}`)
       .on(
-        'postgres_changes',
+        'postgres_changes' as const,
         {
           event: '*',
           schema: 'public',
           table: 'vaults',
           filter: `id=eq.${vaultId}`,
-        },
-        (payload: RealtimePayload<Vault>) => {
+        } as any,
+        (payload: any) => {
           callback({ type: 'vault_updated', payload });
         }
       )
@@ -47,38 +48,38 @@ export const realtimeService = {
     const channel = supabase
       .channel(`sources:${vaultId}`)
       .on(
-        'postgres_changes',
+        'postgres_changes' as const,
         {
           event: 'INSERT',
           schema: 'public',
           table: 'sources',
           filter: `vault_id=eq.${vaultId}`,
-        },
-        (payload: RealtimePayload<Source>) => {
+        } as any,
+        (payload: any) => {
           callback({ type: 'source_added', payload });
         }
       )
       .on(
-        'postgres_changes',
+        'postgres_changes' as const,
         {
           event: 'UPDATE',
           schema: 'public',
           table: 'sources',
           filter: `vault_id=eq.${vaultId}`,
-        },
-        (payload: RealtimePayload<Source>) => {
+        } as any,
+        (payload: any) => {
           callback({ type: 'source_updated', payload });
         }
       )
       .on(
-        'postgres_changes',
+        'postgres_changes' as const,
         {
           event: 'DELETE',
           schema: 'public',
           table: 'sources',
           filter: `vault_id=eq.${vaultId}`,
-        },
-        (payload: RealtimePayload<Source>) => {
+        } as any,
+        (payload: any) => {
           callback({ type: 'source_deleted', payload });
         }
       )
@@ -96,38 +97,38 @@ export const realtimeService = {
     const channel = supabase
       .channel(`annotations:${sourceId}`)
       .on(
-        'postgres_changes',
+        'postgres_changes' as const,
         {
           event: 'INSERT',
           schema: 'public',
           table: 'annotations',
           filter: `source_id=eq.${sourceId}`,
-        },
-        (payload: RealtimePayload<Annotation>) => {
+        } as any,
+        (payload: any) => {
           callback({ type: 'annotation_added', payload });
         }
       )
       .on(
-        'postgres_changes',
+        'postgres_changes' as const,
         {
           event: 'UPDATE',
           schema: 'public',
           table: 'annotations',
           filter: `source_id=eq.${sourceId}`,
-        },
-        (payload: RealtimePayload<Annotation>) => {
+        } as any,
+        (payload: any) => {
           callback({ type: 'annotation_updated', payload });
         }
       )
       .on(
-        'postgres_changes',
+        'postgres_changes' as const,
         {
           event: 'DELETE',
           schema: 'public',
           table: 'annotations',
           filter: `source_id=eq.${sourceId}`,
-        },
-        (payload: RealtimePayload<Annotation>) => {
+        } as any,
+        (payload: any) => {
           callback({ type: 'annotation_deleted', payload });
         }
       )
@@ -145,38 +146,38 @@ export const realtimeService = {
     const channel = supabase
       .channel(`members:${vaultId}`)
       .on(
-        'postgres_changes',
+        'postgres_changes' as const,
         {
           event: 'INSERT',
           schema: 'public',
           table: 'vault_members',
           filter: `vault_id=eq.${vaultId}`,
-        },
-        (payload: RealtimePayload<VaultMember>) => {
+        } as any,
+        (payload: any) => {
           callback({ type: 'member_added', payload });
         }
       )
       .on(
-        'postgres_changes',
+        'postgres_changes' as const,
         {
           event: 'UPDATE',
           schema: 'public',
           table: 'vault_members',
           filter: `vault_id=eq.${vaultId}`,
-        },
-        (payload: RealtimePayload<VaultMember>) => {
+        } as any,
+        (payload: any) => {
           callback({ type: 'member_role_changed', payload });
         }
       )
       .on(
-        'postgres_changes',
+        'postgres_changes' as const,
         {
           event: 'DELETE',
           schema: 'public',
           table: 'vault_members',
           filter: `vault_id=eq.${vaultId}`,
-        },
-        (payload: RealtimePayload<VaultMember>) => {
+        } as any,
+        (payload: any) => {
           callback({ type: 'member_removed', payload });
         }
       )
@@ -194,13 +195,13 @@ export const realtimeService = {
     const channel = supabase
       .channel(`activity:${vaultId}`)
       .on(
-        'postgres_changes',
+        'postgres_changes' as const,
         {
           event: 'INSERT',
           schema: 'public',
           table: 'activity_logs',
           filter: `vault_id=eq.${vaultId}`,
-        },
+        } as any,
         (payload: any) => {
           callback({ type: 'activity_logged', payload });
         }

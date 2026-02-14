@@ -12,9 +12,14 @@
   "typescript.defaultSetting.tsserver.maxTsServerMemory": 4096,
   "search.exclude": {
     "**/node_modules": true,
-    "supabase/functions": true
+    "supabase/functions": true,
+    "supabase/migrations": true
   },
   "files.exclude": {
-    "**/node_modules": true
-  }
+    "**/node_modules": true,
+    "supabase/functions": true
+  },
+  "typescript.exclude": ["supabase/functions/**/*"],
+  "deno.enable": false
 }
+
