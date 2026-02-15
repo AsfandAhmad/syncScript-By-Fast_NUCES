@@ -24,7 +24,11 @@ export function AnnotationItem({
   const [saving, setSaving] = useState(false);
 
   const isOwner = currentUserId === annotation.created_by;
-  const initials = annotation.created_by?.slice(0, 2).toUpperCase() ?? '??';
+  const displayName =
+    annotation.author_name ||
+    annotation.author_email ||
+    annotation.created_by?.slice(0, 8) ||
+    'Unknown';
 
   const handleSave = async () => {
     if (!editContent.trim() || !onUpdate) return;
@@ -55,7 +59,9 @@ export function AnnotationItem({
 
       <div className="flex-1 space-y-1">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs text-muted-foreground">
+          <div className="flex flex-col">
+            <p className="text-sm font-medium">{displayName}</p>
+            <p className="text-xs text-muted-foreground">
             {new Date(annotation.created_at).toLocaleDateString('en-US', {
               month: 'short',
               day: 'numeric',
@@ -67,6 +73,7 @@ export function AnnotationItem({
               <span className="ml-1 text-muted-foreground/60">(edited v{annotation.version})</span>
             )}
           </p>
+          </div>
 
           {isOwner && !isEditing && (
             <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">

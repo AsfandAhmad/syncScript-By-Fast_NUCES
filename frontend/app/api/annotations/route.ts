@@ -40,7 +40,29 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ data, count: count || 0 });
+    // Enrich annotations with author name/email
+    const enriched = await Promise.all(
+      (data || []).map(async (ann: Record<string, unknown>) => {
+        if (!ann.created_by) return ann;
+        try {
+          const { data: { user: authorUser } } = await supabase.auth.admin.getUserById(
+            ann.created_by as string
+          );
+          return {
+            ...ann,
+            author_email: authorUser?.email ?? null,
+            author_name:
+              authorUser?.user_metadata?.full_name ??
+              authorUser?.user_metadata?.name ??
+              null,
+          };
+        } catch {
+          return ann;
+        }
+      })
+    );
+
+    return NextResponse.json({ data: enriched, count: count || 0 });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

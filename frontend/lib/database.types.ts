@@ -43,6 +43,9 @@ export interface Annotation {
   created_by: string;
   created_at: string;
   updated_at: string;
+  /** Populated by API enrichment */
+  author_email?: string;
+  author_name?: string;
 }
 
 export interface FileRecord {
