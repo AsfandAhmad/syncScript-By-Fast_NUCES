@@ -27,51 +27,60 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false });
 
     if (error) {
+      console.error('[public-vaults] Query error:', error.message);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Enrich with owner name/email and membership status
-    const enriched = await Promise.all(
-      (vaults || []).map(async (vault) => {
-        // Get owner info
-        let owner_email: string | null = null;
-        let owner_name: string | null = null;
-        try {
-          const {
-            data: { user: ownerUser },
-          } = await supabase.auth.admin.getUserById(vault.owner_id);
-          owner_email = ownerUser?.email ?? null;
-          owner_name =
-            ownerUser?.user_metadata?.full_name ??
-            ownerUser?.user_metadata?.name ??
-            null;
-        } catch {
-          // non-critical
-        }
+    // Collect unique owner IDs for batch lookup
+    const ownerIds = [...new Set((vaults || []).map((v) => v.owner_id).filter(Boolean))];
 
-        // Check if current user is a member
-        let is_member = false;
-        if (currentUserId) {
-          const { data: membership } = await supabase
-            .from('vault_members')
-            .select('id')
-            .eq('vault_id', vault.id)
-            .eq('user_id', currentUserId)
-            .maybeSingle();
-          is_member = !!membership;
+    // Batch-fetch owner info via auth.admin (with error handling per user)
+    const ownerMap = new Map<string, { email: string | null; name: string | null }>();
+    for (const ownerId of ownerIds) {
+      try {
+        const { data: { user: ownerUser }, error: userErr } = await supabase.auth.admin.getUserById(ownerId);
+        if (!userErr && ownerUser) {
+          ownerMap.set(ownerId, {
+            email: ownerUser.email ?? null,
+            name: ownerUser.user_metadata?.full_name ?? ownerUser.user_metadata?.name ?? null,
+          });
+        } else {
+          ownerMap.set(ownerId, { email: null, name: null });
         }
+      } catch {
+        ownerMap.set(ownerId, { email: null, name: null });
+      }
+    }
 
-        return {
-          ...vault,
-          owner_email,
-          owner_name,
-          is_member,
-        };
-      })
-    );
+    // Batch-fetch membership for current user
+    const membershipSet = new Set<string>();
+    if (currentUserId && vaults && vaults.length > 0) {
+      const vaultIds = vaults.map((v) => v.id);
+      const { data: memberships } = await supabase
+        .from('vault_members')
+        .select('vault_id')
+        .eq('user_id', currentUserId)
+        .in('vault_id', vaultIds);
+
+      if (memberships) {
+        for (const m of memberships) membershipSet.add(m.vault_id);
+      }
+    }
+
+    // Enrich vaults
+    const enriched = (vaults || []).map((vault) => {
+      const owner = ownerMap.get(vault.owner_id) || { email: null, name: null };
+      return {
+        ...vault,
+        owner_email: owner.email,
+        owner_name: owner.name,
+        is_member: membershipSet.has(vault.id),
+      };
+    });
 
     return NextResponse.json({ data: enriched });
   } catch (err) {
+    console.error('[public-vaults] Error:', err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }

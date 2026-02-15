@@ -136,6 +136,33 @@ class ChatService {
       // Fire-and-forget — don't block on embedding errors
     }
   }
+
+  /**
+   * Bulk-index all existing content in a vault for RAG.
+   * Returns stats about what was indexed.
+   */
+  async indexVault(
+    vaultId: string
+  ): Promise<{ success: boolean; stats?: { totalChunks: number; indexedSources: number; indexedAnnotations: number; indexedFiles: number }; error?: string }> {
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/chat/index-vault', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ vaultId }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Indexing failed' }));
+        return { success: false, error: err.error || 'Indexing failed' };
+      }
+
+      const json = await res.json();
+      return { success: true, stats: json.stats };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  }
 }
 
 export const chatService = new ChatService();

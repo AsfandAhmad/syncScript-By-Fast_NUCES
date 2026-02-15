@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Trash2, Loader2 } from 'lucide-react';
+import { Send, Trash2, Loader2, DatabaseZap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChatMessageBubble } from '@/components/chat-message';
@@ -31,6 +31,8 @@ export function VaultChatPanel({ vaultId, vaultName }: VaultChatPanelProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [isIndexing, setIsIndexing] = useState(false);
+  const [isIndexed, setIsIndexed] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -143,6 +145,26 @@ export function VaultChatPanel({ vaultId, vaultName }: VaultChatPanelProps) {
     [input, isLoading, vaultId, conversationId]
   );
 
+  const handleIndexVault = async () => {
+    setIsIndexing(true);
+    try {
+      const result = await chatService.indexVault(vaultId);
+      if (result.success && result.stats) {
+        const { totalChunks, indexedSources, indexedAnnotations, indexedFiles } = result.stats;
+        setIsIndexed(true);
+        toast.success(
+          `Indexed ${totalChunks} chunks from ${indexedSources} sources, ${indexedAnnotations} annotations, ${indexedFiles} files`
+        );
+      } else {
+        toast.error(result.error || 'Indexing failed');
+      }
+    } catch {
+      toast.error('Failed to index vault content');
+    } finally {
+      setIsIndexing(false);
+    }
+  };
+
   const handleClearHistory = async () => {
     try {
       await chatService.clearHistory(vaultId);
@@ -187,6 +209,29 @@ export function VaultChatPanel({ vaultId, vaultName }: VaultChatPanelProps) {
           </Button>
         )}
       </div>
+
+      {/* Index banner — show when no messages yet and not indexed */}
+      {messages.length === 0 && !isIndexed && (
+        <div className="mx-2 mt-2 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-950">
+          <DatabaseZap className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+          <p className="flex-1 text-xs text-blue-700 dark:text-blue-300">
+            Index this vault&apos;s content so SyncBot can answer questions about your sources, annotations, and files.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 shrink-0 gap-1 text-xs"
+            onClick={handleIndexVault}
+            disabled={isIndexing}
+          >
+            {isIndexing ? (
+              <><Loader2 className="h-3 w-3 animate-spin" /> Indexing...</>
+            ) : (
+              <><DatabaseZap className="h-3 w-3" /> Index Vault</>
+            )}
+          </Button>
+        </div>
+      )}
 
       {/* Messages area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-2 py-3">
