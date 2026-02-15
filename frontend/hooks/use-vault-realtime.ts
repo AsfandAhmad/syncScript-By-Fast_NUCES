@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import supabase from '@/lib/supabase-client';
 
 /** Supported table names for vault realtime subscriptions */
-type VaultTable = 'vaults' | 'sources' | 'annotations' | 'vault_members';
+type VaultTable = 'vaults' | 'sources' | 'annotations' | 'vault_members' | 'files';
 
 /** Event types from Supabase Realtime */
 type EventType = 'INSERT' | 'UPDATE' | 'DELETE';
@@ -124,6 +124,22 @@ export function useVaultRealtime(vaultId: string | undefined) {
         'postgres_changes' as const,
         { event: 'DELETE', schema: 'public', table: 'vault_members', filter: `vault_id=eq.${vaultId}` } as any,
         (p: any) => handleChange('vault_members', 'DELETE', p)
+      )
+      // --- files table ---
+      .on(
+        'postgres_changes' as const,
+        { event: 'INSERT', schema: 'public', table: 'files', filter: `vault_id=eq.${vaultId}` } as any,
+        (p: any) => handleChange('files', 'INSERT', p)
+      )
+      .on(
+        'postgres_changes' as const,
+        { event: 'UPDATE', schema: 'public', table: 'files', filter: `vault_id=eq.${vaultId}` } as any,
+        (p: any) => handleChange('files', 'UPDATE', p)
+      )
+      .on(
+        'postgres_changes' as const,
+        { event: 'DELETE', schema: 'public', table: 'files', filter: `vault_id=eq.${vaultId}` } as any,
+        (p: any) => handleChange('files', 'DELETE', p)
       )
       .subscribe();
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, CheckCheck, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { NotificationItem } from '@/components/notification-item';
 import { notificationService } from '@/lib/services/notification.service';
 import { useAuth } from '@/hooks/use-auth';
+import supabase from '@/lib/supabase-client';
 import type { Notification } from '@/lib/database.types';
 
 export function NotificationCenter() {
@@ -22,12 +23,68 @@ export function NotificationCenter() {
   const [loading, setLoading] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
   const [open, setOpen] = useState(false);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  // Notifications table does not exist yet – skip fetch to avoid 404 console errors.
-  // To enable: create the table using supabase/migrations/004_notifications.sql,
-  // then restore the fetchNotifications() call below.
+  // Fetch notifications from the database
+  const fetchNotifications = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const result = await notificationService.getNotifications(50);
+      if (result.status === 'success' && result.data) {
+        setNotifications(result.data);
+      }
+    } catch {
+      // Table may not exist — silently fail
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  // Fetch on mount and when user changes
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
+
+  // Subscribe to realtime notifications for the current user
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`user-notifications:${user.id}`)
+      .on(
+        'postgres_changes' as const,
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        } as any,
+        (payload: any) => {
+          // Prepend new notification to list in realtime
+          if (payload.new) {
+            setNotifications((prev) => [payload.new as Notification, ...prev]);
+          }
+        }
+      )
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [user?.id]);
+
+  // Refetch when popover opens
+  useEffect(() => {
+    if (open) fetchNotifications();
+  }, [open, fetchNotifications]);
 
   const handleMarkAllRead = async () => {
     setMarkingAll(true);

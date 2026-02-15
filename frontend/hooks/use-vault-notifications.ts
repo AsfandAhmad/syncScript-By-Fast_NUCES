@@ -20,6 +20,9 @@ const NOTIFICATION_MAP: Record<string, { title: string; description?: string; va
   'vault_members:DELETE': { title: '👤 Member removed',          description: 'A member was removed from the vault.',     variant: 'warning' },
   'vaults:UPDATE':        { title: '📁 Vault updated',           description: 'The vault details were modified.',         variant: 'info' },
   'vaults:DELETE':        { title: '⚠️ Vault deleted',            description: 'This vault has been deleted.',             variant: 'warning' },
+  'files:INSERT':         { title: '📎 File uploaded',           description: 'A new file was uploaded.',                 variant: 'success' },
+  'files:UPDATE':         { title: '📎 File updated',            description: 'A file was updated.',                      variant: 'info' },
+  'files:DELETE':         { title: '🗑️ File deleted',             description: 'A file was removed from the vault.',       variant: 'warning' },
 };
 
 /**
