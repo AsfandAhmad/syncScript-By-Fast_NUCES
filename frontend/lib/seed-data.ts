@@ -72,8 +72,8 @@ export async function seedDatabase() {
       if (error) {
         // User might already exist
         console.log(`   ℹ️  User ${user.email} may already exist, fetching...`);
-        const { data: existingUsers } = await supabase.auth.admin.listUsers();
-        const existingUser = existingUsers.users.find(u => u.email === user.email);
+        const listResult = await supabase.auth.admin.listUsers();
+        const existingUser = (listResult.data?.users || []).find((u: any) => u.email === user.email);
         if (existingUser) {
           userIds.push(existingUser.id);
           console.log(`   ✅ Found existing user: ${user.name} (${user.email})`);

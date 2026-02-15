@@ -34,20 +34,26 @@ export async function GET(request: NextRequest) {
     // Collect unique owner IDs for batch lookup
     const ownerIds = [...new Set((vaults || []).map((v) => v.owner_id).filter(Boolean))];
 
-    // Batch-fetch owner info via auth.admin (with error handling per user)
+    // Batch-fetch ALL users once instead of N sequential getUserById calls
     const ownerMap = new Map<string, { email: string | null; name: string | null }>();
-    for (const ownerId of ownerIds) {
-      try {
-        const { data: { user: ownerUser }, error: userErr } = await supabase.auth.admin.getUserById(ownerId);
-        if (!userErr && ownerUser) {
-          ownerMap.set(ownerId, {
-            email: ownerUser.email ?? null,
-            name: ownerUser.user_metadata?.full_name ?? ownerUser.user_metadata?.name ?? null,
-          });
-        } else {
-          ownerMap.set(ownerId, { email: null, name: null });
+    try {
+      const listResult = await supabase.auth.admin.listUsers({ perPage: 1000 });
+      if (!listResult.error && listResult.data?.users) {
+        for (const u of listResult.data.users) {
+          if (ownerIds.includes(u.id)) {
+            ownerMap.set(u.id, {
+              email: u.email ?? null,
+              name: (u as any).user_metadata?.full_name ?? (u as any).user_metadata?.name ?? null,
+            });
+          }
         }
-      } catch {
+      }
+    } catch {
+      // Fallback: leave ownerMap empty
+    }
+    // Fill in any missing owners
+    for (const ownerId of ownerIds) {
+      if (!ownerMap.has(ownerId)) {
         ownerMap.set(ownerId, { email: null, name: null });
       }
     }

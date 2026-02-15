@@ -95,12 +95,12 @@ export async function POST(
 
     // If user_id looks like an email, resolve it to a UUID
     if (user_id.includes('@')) {
-      const { data: { users }, error: listErr } = await supabase.auth.admin.listUsers();
-      if (listErr) {
+      const listResult = await supabase.auth.admin.listUsers();
+      if (listResult.error) {
         return NextResponse.json({ error: 'Failed to look up user' }, { status: 500 });
       }
-      const found = users.find(
-        (u) => u.email?.toLowerCase() === user_id.toLowerCase()
+      const found = listResult.data.users.find(
+        (u: any) => u.email?.toLowerCase() === user_id.toLowerCase()
       );
       if (!found) {
         return NextResponse.json(

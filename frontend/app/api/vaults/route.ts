@@ -49,6 +49,22 @@ export async function GET(request: NextRequest) {
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
 
+    // If a specific vault ID was requested and not found in user's vaults,
+    // check if it's a public vault so non-members can still view it
+    const requestedId = request.nextUrl.searchParams.get('id');
+    if (requestedId && !allVaults.some((v) => v.id === requestedId)) {
+      const { data: publicVault } = await supabase
+        .from('vaults')
+        .select('*')
+        .eq('id', requestedId)
+        .eq('is_public', true)
+        .single();
+
+      if (publicVault) {
+        return NextResponse.json({ data: [...allVaults, publicVault] });
+      }
+    }
+
     return NextResponse.json({ data: allVaults });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
