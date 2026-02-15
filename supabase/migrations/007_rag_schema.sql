@@ -16,8 +16,8 @@ CREATE TABLE IF NOT EXISTS document_chunks (
   content TEXT NOT NULL,
   metadata JSONB DEFAULT '{}',
 
-  -- Embedding vector (3072 dimensions for Gemini gemini-embedding-001)
-  embedding vector(3072),
+  -- Embedding vector (768 dimensions — gemini-embedding-001 truncated via outputDimensionality)
+  embedding vector(768),
 
   -- Timestamps
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -67,7 +67,7 @@ CREATE INDEX idx_chat_messages_conv ON chat_messages(conversation_id, created_at
 
 CREATE OR REPLACE FUNCTION match_vault_chunks(
   p_vault_id UUID,
-  p_query_embedding vector(3072),
+  p_query_embedding vector(768),
   p_match_count INTEGER DEFAULT 8,
   p_match_threshold FLOAT DEFAULT 0.5
 )

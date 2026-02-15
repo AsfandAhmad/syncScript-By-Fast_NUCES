@@ -1,44 +1,72 @@
 /**
  * Gemini embedding wrapper for RAG pipeline.
- * Uses gemini-embedding-001 (3072 dimensions).
+ * Uses gemini-embedding-001 with outputDimensionality=768
+ * (truncated from native 3072 to fit pgvector index limit of 2000).
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
 const EMBEDDING_MODEL = 'gemini-embedding-001';
+const OUTPUT_DIMENSIONS = 768;
 
-function getClient() {
+function getApiKey(): string {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
-  return new GoogleGenerativeAI(apiKey);
+  return apiKey;
 }
 
 /**
  * Generate an embedding vector for a single text string.
- * Returns a 3072-dimensional float array.
+ * Returns a 768-dimensional float array.
  */
 export async function embedText(text: string): Promise<number[]> {
-  const genAI = getClient();
-  const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
-  const result = await model.embedContent(text);
-  return result.embedding.values;
+  const apiKey = getApiKey();
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent?key=${apiKey}`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: `models/${EMBEDDING_MODEL}`,
+      content: { parts: [{ text }] },
+      outputDimensionality: OUTPUT_DIMENSIONS,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Embedding API error: ${err}`);
+  }
+
+  const data = await res.json();
+  return data.embedding.values;
 }
 
 /**
  * Generate embeddings for multiple texts in batch.
- * Gemini supports batch embedding natively.
+ * Uses the batchEmbedContents endpoint.
  */
 export async function embedTexts(texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return [];
 
-  const genAI = getClient();
-  const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
+  const apiKey = getApiKey();
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:batchEmbedContents?key=${apiKey}`;
 
-  const result = await model.batchEmbedContents({
-    requests: texts.map((text) => ({
-      content: { role: 'user', parts: [{ text }] },
-    })),
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      requests: texts.map((text) => ({
+        model: `models/${EMBEDDING_MODEL}`,
+        content: { parts: [{ text }] },
+        outputDimensionality: OUTPUT_DIMENSIONS,
+      })),
+    }),
   });
 
-  return result.embeddings.map((e) => e.values);
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Batch embedding API error: ${err}`);
+  }
+
+  const data = await res.json();
+  return data.embeddings.map((e: { values: number[] }) => e.values);
 }

@@ -1,28 +1,28 @@
--- Fix: update vector dimensions from 768 to 3072 for gemini-embedding-001
--- Run this in Supabase SQL Editor AFTER 007_rag_schema.sql
+-- Fix: ensure vector dimensions are 768 (gemini-embedding-001 with outputDimensionality=768)
+-- Run this in Supabase SQL Editor to fix the embedding column and indexes
 
--- Drop the old HNSW index (it references the old dimension)
+-- Drop the old HNSW index
 DROP INDEX IF EXISTS idx_chunks_embedding;
 
 -- Drop the old RPC function
 DROP FUNCTION IF EXISTS match_vault_chunks;
 
--- Alter the column to use 3072 dimensions
+-- Recreate the embedding column as 768 dimensions
 ALTER TABLE document_chunks
   DROP COLUMN IF EXISTS embedding;
 
 ALTER TABLE document_chunks
-  ADD COLUMN embedding vector(3072);
+  ADD COLUMN embedding vector(768);
 
--- Recreate HNSW index with new dimensions
+-- Recreate HNSW index
 CREATE INDEX idx_chunks_embedding ON document_chunks
   USING hnsw (embedding vector_cosine_ops)
   WITH (m = 16, ef_construction = 64);
 
--- Recreate RPC function with new dimensions
+-- Recreate RPC function
 CREATE OR REPLACE FUNCTION match_vault_chunks(
   p_vault_id UUID,
-  p_query_embedding vector(3072),
+  p_query_embedding vector(768),
   p_match_count INTEGER DEFAULT 8,
   p_match_threshold FLOAT DEFAULT 0.5
 )
