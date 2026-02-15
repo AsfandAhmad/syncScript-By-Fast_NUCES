@@ -8,8 +8,8 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 const STORAGE_BUCKET = 'vault-files';
 
-// Max file size to process (5MB) — skip very large files
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
+// Max file size to process (1MB) — skip larger files to prevent OOM
+const MAX_FILE_SIZE = 1 * 1024 * 1024;
 
 // Text-based file extensions we can extract content from
 const TEXT_EXTENSIONS = new Set([
@@ -313,23 +313,10 @@ function extractTextFromPdfBuffer(buffer: ArrayBuffer): string {
     i++;
   }
 
-  // Also try to extract text from stream objects (for text-based PDFs)
-  const fullText = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-  const streamRegex = /\(([^)]{2,})\)/g;
-  let match;
-  const streamTexts: string[] = [];
-  while ((match = streamRegex.exec(fullText)) !== null) {
-    const t = match[1].replace(/\\[nrt]/g, ' ').trim();
-    if (t.length > 2 && /[a-zA-Z]{2}/.test(t)) {
-      streamTexts.push(t);
-    }
-  }
-
   const combined = chunks.join('').trim();
-  const fromRegex = streamTexts.join(' ').trim();
 
-  // Return whichever has more content
-  return combined.length > fromRegex.length ? combined : fromRegex;
+  // Limit output to 50KB of text to avoid downstream memory issues
+  return combined.length > 50000 ? combined.slice(0, 50000) : combined;
 }
 
 /**

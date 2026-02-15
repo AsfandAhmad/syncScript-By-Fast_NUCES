@@ -150,11 +150,15 @@ export function VaultChatPanel({ vaultId, vaultName }: VaultChatPanelProps) {
     try {
       const result = await chatService.indexVault(vaultId);
       if (result.success && result.stats) {
-        const { totalChunks, indexedSources, indexedAnnotations, indexedFiles } = result.stats;
+        const { totalChunks, indexedSources, indexedAnnotations, indexedFiles, skippedAlreadyIndexed, message } = result.stats;
         setIsIndexed(true);
-        toast.success(
-          `Indexed ${totalChunks} chunks from ${indexedSources} sources, ${indexedAnnotations} annotations, ${indexedFiles} files`
-        );
+        if (totalChunks === 0 && skippedAlreadyIndexed) {
+          toast.success(`All content is already indexed (${skippedAlreadyIndexed} items)`);
+        } else {
+          toast.success(
+            `Indexed ${totalChunks} chunks from ${indexedSources} sources, ${indexedAnnotations} annotations, ${indexedFiles} files${skippedAlreadyIndexed ? ` (${skippedAlreadyIndexed} already indexed)` : ''}`
+          );
+        }
       } else {
         toast.error(result.error || 'Indexing failed');
       }

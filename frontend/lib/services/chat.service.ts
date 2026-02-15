@@ -35,12 +35,18 @@ class ChatService {
     conversationId: string | null,
     callbacks: StreamCallbacks
   ): Promise<void> {
-    const headers = await getAuthHeaders();
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ vaultId, question, conversationId }),
-    });
+    let res: Response;
+    try {
+      const headers = await getAuthHeaders();
+      res = await fetch('/api/chat', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ vaultId, question, conversationId }),
+      });
+    } catch (err) {
+      callbacks.onError('Unable to reach server. Please refresh the page and try again.');
+      return;
+    }
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'Chat request failed' }));
@@ -143,14 +149,21 @@ class ChatService {
    */
   async indexVault(
     vaultId: string
-  ): Promise<{ success: boolean; stats?: { totalChunks: number; indexedSources: number; indexedAnnotations: number; indexedFiles: number }; error?: string }> {
+  ): Promise<{ success: boolean; stats?: { totalChunks: number; indexedSources: number; indexedAnnotations: number; indexedFiles: number; skippedAlreadyIndexed?: number; message?: string }; error?: string }> {
     try {
       const headers = await getAuthHeaders();
+      // 60 second timeout to prevent hanging forever
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 60000);
+
       const res = await fetch('/api/chat/index-vault', {
         method: 'POST',
         headers,
         body: JSON.stringify({ vaultId }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeout);
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'Indexing failed' }));
@@ -160,6 +173,9 @@ class ChatService {
       const json = await res.json();
       return { success: true, stats: json.stats };
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return { success: false, error: 'Indexing timed out. The vault may have too much content — try again and it will skip already-indexed items.' };
+      }
       return { success: false, error: String(err) };
     }
   }

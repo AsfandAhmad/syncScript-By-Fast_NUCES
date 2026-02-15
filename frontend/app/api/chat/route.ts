@@ -5,15 +5,11 @@ import { retrieveChunks, formatContext } from '@/lib/rag/retriever';
 import { buildSystemPrompt, buildMessages } from '@/lib/rag/prompt';
 import type { ChatMessage } from '@/lib/database.types';
 
-// Models to try in order — first available free-tier model wins
+// Models to try in order — fastest free-tier models first
 const LLM_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-flash-latest',
-  'gemini-flash-lite-latest',
-  'gemma-3-4b-it',
+  'gemini-2.5-flash-lite',   // fastest, lightweight
+  'gemini-2.5-flash',        // fast, capable (thinking disabled)
 ];
-const MAX_RETRIES = 2;
-const RETRY_DELAY_MS = 2000;
 
 /**
  * POST /api/chat — RAG chatbot endpoint with streaming response.
@@ -45,65 +41,56 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Not a member of this vault' }, { status: 403 });
     }
 
-    // 3. Get vault details
-    const { data: vault } = await supabase
-      .from('vaults')
-      .select('name, description, created_at, owner_id')
-      .eq('id', vaultId)
-      .single();
+    // 3. Fetch vault info, members, conversation, and chunks ALL IN PARALLEL
+    const [vaultRes, membersRes, convRes, chunksResult] = await Promise.all([
+      // Vault details
+      supabase.from('vaults').select('name, description, created_at, owner_id').eq('id', vaultId).single(),
+      // Members
+      supabase.from('vault_members').select('user_id, role, joined_at').eq('vault_id', vaultId),
+      // Existing conversation
+      conversationId
+        ? Promise.resolve({ data: { id: conversationId } })
+        : supabase.from('chat_conversations').select('id').eq('vault_id', vaultId).eq('user_id', user.id).single(),
+      // RAG retrieval (embedding query + vector search) — catch errors so chat still works
+      retrieveChunks(vaultId, question, 8, 0.4).catch((err) => {
+        console.error('[chat] retrieveChunks failed:', err);
+        return [];
+      }),
+    ]);
 
+    const vault = vaultRes.data;
     const vaultName = vault?.name || 'Vault';
     const vaultDescription = vault?.description || '';
     const vaultCreatedAt = vault?.created_at ? new Date(vault.created_at).toLocaleDateString() : '';
 
-    // Get owner info
-    let ownerName = '';
-    if (vault?.owner_id) {
-      try {
-        const { data: { user: ownerUser } } = await supabase.auth.admin.getUserById(vault.owner_id);
-        if (ownerUser) {
-          ownerName = ownerUser.user_metadata?.full_name || ownerUser.user_metadata?.name || ownerUser.email?.split('@')[0] || '';
-        }
-      } catch { /* skip */ }
-    }
-
-    // Build vault info text
+    // Build vault info text (skip owner fetch to save time — use member list instead)
     const vaultInfoParts: string[] = [`Name: ${vaultName}`];
     if (vaultDescription) vaultInfoParts.push(`Description: ${vaultDescription}`);
-    if (ownerName) vaultInfoParts.push(`Owner: ${ownerName}`);
     if (vaultCreatedAt) vaultInfoParts.push(`Created: ${vaultCreatedAt}`);
 
-    // Count content
-    const [{ count: srcCount }, { count: annCount }, { count: fileCount }] = await Promise.all([
+    // Count content in parallel
+    const [{ count: srcCount }, { count: fileCount }] = await Promise.all([
       supabase.from('sources').select('id', { count: 'exact', head: true }).eq('vault_id', vaultId),
-      supabase.from('annotations').select('id', { count: 'exact', head: true }).eq('source_id', vaultId),
       supabase.from('files').select('id', { count: 'exact', head: true }).eq('vault_id', vaultId),
     ]);
-    vaultInfoParts.push(`Contains: ${srcCount || 0} sources, ${annCount || 0} annotations, ${fileCount || 0} files`);
+    vaultInfoParts.push(`Contains: ${srcCount || 0} sources, ${fileCount || 0} files`);
     const vaultInfoText = vaultInfoParts.join('\n');
 
-    // 3b. Get vault members with their info
-    const { data: members } = await supabase
-      .from('vault_members')
-      .select('user_id, role, joined_at')
-      .eq('vault_id', vaultId);
-
+    // Build members text from the parallel-fetched members
+    const members = membersRes.data || [];
     let membersText = '';
-    if (members && members.length > 0) {
+    if (members.length > 0) {
+      // Batch fetch member details in parallel
       const memberDetails = await Promise.all(
         members.map(async (m) => {
-          let name = 'Unknown';
-          let email = '';
           try {
             const { data: { user: u } } = await supabase.auth.admin.getUserById(m.user_id);
-            if (u) {
-              name = u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0] || 'Unknown';
-              email = u.email || '';
-            }
+            const name = u?.user_metadata?.full_name || u?.user_metadata?.name || u?.email?.split('@')[0] || 'Unknown';
+            const email = u?.email || '';
+            return { name, email, role: m.role, joined_at: m.joined_at };
           } catch {
-            // skip
+            return { name: 'Unknown', email: '', role: m.role, joined_at: m.joined_at };
           }
-          return { name, email, role: m.role, joined_at: m.joined_at };
         })
       );
       membersText = memberDetails
@@ -112,56 +99,35 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. Get or create conversation
-    let convId = conversationId;
+    let convId = convRes.data?.id || null;
     if (!convId) {
-      // Try to find existing conversation
-      const { data: existing } = await supabase
+      const { data: newConv } = await supabase
         .from('chat_conversations')
+        .insert({ vault_id: vaultId, user_id: user.id, title: question.slice(0, 100) })
         .select('id')
-        .eq('vault_id', vaultId)
-        .eq('user_id', user.id)
         .single();
-
-      if (existing) {
-        convId = existing.id;
-      } else {
-        const { data: newConv } = await supabase
-          .from('chat_conversations')
-          .insert({
-            vault_id: vaultId,
-            user_id: user.id,
-            title: question.slice(0, 100),
-          })
-          .select('id')
-          .single();
-        convId = newConv?.id;
-      }
+      convId = newConv?.id;
     }
 
-    // 5. Save user message
-    if (convId) {
-      await supabase.from('chat_messages').insert({
-        conversation_id: convId,
-        role: 'user',
-        content: question,
-      });
-    }
+    // 5. Save user message + load history in parallel
+    const [, historyRes] = await Promise.all([
+      convId
+        ? supabase.from('chat_messages').insert({ conversation_id: convId, role: 'user', content: question })
+        : Promise.resolve(null),
+      convId
+        ? supabase.from('chat_messages').select('*').eq('conversation_id', convId).order('created_at', { ascending: true }).limit(20)
+        : Promise.resolve({ data: [] }),
+    ]);
 
-    // 6. Load conversation history
-    let history: ChatMessage[] = [];
-    if (convId) {
-      const { data: msgs } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('conversation_id', convId)
-        .order('created_at', { ascending: true })
-        .limit(20);
-      history = (msgs || []) as ChatMessage[];
-    }
+    const history = (historyRes?.data || []) as ChatMessage[];
 
-    // 7. Retrieve relevant chunks
-    const chunks = await retrieveChunks(vaultId, question, 8, 0.4);
-    const { contextText, citations } = formatContext(chunks);
+    // 6. Format context from pre-fetched chunks
+    const { contextText, citations } = formatContext(chunksResult);
+
+    // Small delay after embedding call to avoid back-to-back rate limits
+    if (chunksResult.length > 0) {
+      await new Promise((r) => setTimeout(r, 2000));
+    }
 
     // 8. Build prompt
     const systemPrompt = buildSystemPrompt(vaultName, contextText, membersText, vaultInfoText);
@@ -197,55 +163,75 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    // Try each model with retries
+    // Try each model — smart rate-limit handling
+    // Round 1: try each model once (no delays)
+    // Round 2: if all 429'd, wait 15s then try each model once more
     let geminiResponse: Response | null = null;
     let usedModel = '';
 
-    for (const modelName of LLM_MODELS) {
-      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${apiKey}`;
+    async function tryModel(modelName: string): Promise<Response | null> {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${apiKey}`;
 
-        try {
-          const resp = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody),
-          });
+      // Disable thinking for gemini-2.5-* models to avoid delays
+      const body = modelName.startsWith('gemini-2.5')
+        ? { ...requestBody, generationConfig: { ...requestBody.generationConfig, thinkingConfig: { thinkingBudget: 0 } } }
+        : requestBody;
 
-          if (resp.ok) {
-            geminiResponse = resp;
-            usedModel = modelName;
-            break;
-          }
+      try {
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        return resp;
+      } catch (err) {
+        console.error(`[chat] Fetch error for ${modelName}:`, err);
+        return null;
+      }
+    }
 
-          const status = resp.status;
-          if (status === 429) {
-            console.warn(`[chat] 429 from ${modelName} (attempt ${attempt + 1}). Retrying...`);
-            if (attempt < MAX_RETRIES) {
-              await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * (attempt + 1)));
-              continue;
-            }
-            // Exhausted retries for this model, try next
-            break;
-          }
+    for (let round = 0; round < 2; round++) {
+      if (round === 1) {
+        console.log('[chat] All models rate-limited. Waiting 15s before retry...');
+        await new Promise((r) => setTimeout(r, 15000));
+      }
 
-          if (status === 404) {
-            console.warn(`[chat] Model ${modelName} not found, trying next...`);
-            break; // skip retries, go to next model
-          }
+      for (const modelName of LLM_MODELS) {
+        const resp = await tryModel(modelName);
+        if (!resp) continue;
 
-          // Other error — try next model
-          const errText = await resp.text();
-          console.error(`[chat] ${modelName} returned ${status}: ${errText.slice(0, 200)}`);
-          break;
-        } catch (fetchErr) {
-          console.error(`[chat] Fetch error for ${modelName}:`, fetchErr);
-          if (attempt < MAX_RETRIES) {
-            await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * (attempt + 1)));
-            continue;
-          }
+        if (resp.ok) {
+          geminiResponse = resp;
+          usedModel = modelName;
           break;
         }
+
+        const status = resp.status;
+        if (status === 404) {
+          console.warn(`[chat] Model ${modelName} not found, skipping`);
+          continue;
+        }
+        if (status === 429) {
+          const errBody = await resp.text().catch(() => '');
+          const isQuotaExhausted = errBody.includes('exceeded your current quota');
+          if (isQuotaExhausted) {
+            console.warn(`[chat] Quota exhausted on ${modelName}`);
+            // All models share the same key/quota — skip remaining models too
+            geminiResponse = null;
+            usedModel = '';
+            // Break out of both loops
+            return NextResponse.json(
+              { error: 'Gemini API daily quota exhausted. Please wait a few hours or use a new API key.' },
+              { status: 429 }
+            );
+          }
+          console.warn(`[chat] 429 from ${modelName} (round ${round + 1})`);
+          continue; // try next model immediately
+        }
+        // Other error
+        const errText = await resp.text().catch(() => '');
+        console.error(`[chat] ${modelName}: ${status} ${errText.slice(0, 200)}`);
+        continue;
       }
 
       if (geminiResponse) break;
@@ -253,7 +239,7 @@ export async function POST(request: NextRequest) {
 
     if (!geminiResponse) {
       return NextResponse.json(
-        { error: 'All Gemini models exhausted. Please wait a moment and try again.' },
+        { error: 'Gemini API is rate-limited. Please wait 30 seconds and try again.' },
         { status: 503 }
       );
     }
