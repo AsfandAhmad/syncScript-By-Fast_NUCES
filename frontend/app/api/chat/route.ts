@@ -54,6 +54,35 @@ export async function POST(request: NextRequest) {
 
     const vaultName = vault?.name || 'Vault';
 
+    // 3b. Get vault members with their info
+    const { data: members } = await supabase
+      .from('vault_members')
+      .select('user_id, role, joined_at')
+      .eq('vault_id', vaultId);
+
+    let membersText = '';
+    if (members && members.length > 0) {
+      const memberDetails = await Promise.all(
+        members.map(async (m) => {
+          let name = 'Unknown';
+          let email = '';
+          try {
+            const { data: { user: u } } = await supabase.auth.admin.getUserById(m.user_id);
+            if (u) {
+              name = u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0] || 'Unknown';
+              email = u.email || '';
+            }
+          } catch {
+            // skip
+          }
+          return { name, email, role: m.role, joined_at: m.joined_at };
+        })
+      );
+      membersText = memberDetails
+        .map((m) => `- ${m.name}${m.email ? ` (${m.email})` : ''} — Role: ${m.role}${m.joined_at ? `, Joined: ${new Date(m.joined_at).toLocaleDateString()}` : ''}`)
+        .join('\n');
+    }
+
     // 4. Get or create conversation
     let convId = conversationId;
     if (!convId) {
@@ -107,7 +136,7 @@ export async function POST(request: NextRequest) {
     const { contextText, citations } = formatContext(chunks);
 
     // 8. Build prompt
-    const systemPrompt = buildSystemPrompt(vaultName, contextText);
+    const systemPrompt = buildSystemPrompt(vaultName, contextText, membersText);
     const messages = buildMessages(systemPrompt, history.slice(0, -1), question);
 
     // 9. Stream from Gemini (direct REST API with retry + model fallback)
