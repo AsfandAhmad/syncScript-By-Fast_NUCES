@@ -58,3 +58,21 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Chat thinking & cursor animations */
+@keyframes thinking-bounce {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes cursor-blink {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+  100% { opacity: 1; }
+}

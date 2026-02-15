@@ -56,12 +56,24 @@ export function ChatMessageBubble({
           )}
         >
           {isBot ? (
-            <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-              {isStreaming && (
-                <span className="ml-1 inline-block h-4 w-1 animate-pulse bg-primary" />
-              )}
-            </div>
+            isStreaming && !content.trim() ? (
+              /* Thinking indicator — shown before any text arrives */
+              <div className="flex items-center gap-2 py-0.5">
+                <div className="flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-primary/70 animate-[thinking-bounce_1.4s_ease-in-out_infinite]" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-primary/70 animate-[thinking-bounce_1.4s_ease-in-out_0.2s_infinite]" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-primary/70 animate-[thinking-bounce_1.4s_ease-in-out_0.4s_infinite]" />
+                </div>
+                <span className="text-xs text-muted-foreground font-medium">Thinking…</span>
+              </div>
+            ) : (
+              <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+                {isStreaming && (
+                  <span className="ml-0.5 inline-block h-3.5 w-[3px] rounded-sm bg-primary/80 animate-[cursor-blink_1s_steps(2)_infinite]" />
+                )}
+              </div>
+            )
           ) : (
             <p className="whitespace-pre-wrap">{content}</p>
           )}
