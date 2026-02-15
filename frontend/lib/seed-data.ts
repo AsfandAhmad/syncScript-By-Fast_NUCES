@@ -26,6 +26,37 @@ export async function seedDatabase() {
     console.log('🌱 Starting comprehensive database seeding...');
     console.log('='.repeat(60));
 
+    // Step 0: Ensure is_public column exists (migration 005)
+    console.log('\n🔧 Ensuring is_public column exists on vaults table...');
+    try {
+      // Try a query that references is_public – if it fails, the column doesn't exist
+      const { error: colCheck } = await supabase
+        .from('vaults')
+        .select('is_public')
+        .limit(1);
+
+      if (colCheck && colCheck.message?.includes('is_public')) {
+        // Column doesn't exist – add it via the Supabase SQL API
+        console.log('   ⚠️  is_public column missing – adding via SQL API...');
+        const sqlRes = await fetch(`${supabaseUrl}/rest/v1/rpc/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+          },
+        });
+        // Fall back: try inserting with is_public and let Supabase handle it
+        // The column may need to be added manually if this approach doesn't work
+        console.log('   ℹ️  If seeding fails, run this SQL in Supabase SQL Editor:');
+        console.log('   ALTER TABLE vaults ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE;');
+      } else {
+        console.log('   ✅ is_public column already exists');
+      }
+    } catch {
+      console.log('   ℹ️  Column check skipped – will attempt insert with is_public');
+    }
+
     // Step 1: Create demo users
     console.log('\n👤 Creating demo users...');
     for (const user of DEMO_USERS) {

@@ -68,6 +68,8 @@ export interface ActivityLog {
   vault_id: string;
   action_type: string;
   actor_id?: string;
+  actor_name?: string;
+  actor_email?: string;
   metadata: Record<string, any>;
   timestamp: string;
 }

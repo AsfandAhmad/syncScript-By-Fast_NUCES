@@ -45,8 +45,9 @@ export function ActivityFeed({ items }: ActivityFeedProps) {
         const info = ACTION_LABELS[item.action_type] || { label: item.action_type, category: 'default' };
         const Icon = categoryIcons[info.category] || categoryIcons.default;
         const iconColor = categoryColors[info.category] || categoryColors.default;
-        const initials = item.metadata?.actor_email
-          ? item.metadata.actor_email.substring(0, 2).toUpperCase()
+        const displayName = item.actor_name || item.actor_email || item.metadata?.actor_email || null;
+        const initials = displayName
+          ? displayName.split(' ').map((w: string) => w[0]).join('').substring(0, 2).toUpperCase()
           : item.actor_id?.substring(0, 2).toUpperCase() || '??';
         const targetName = item.metadata?.title || item.metadata?.file_name || item.metadata?.name || '';
 
@@ -62,6 +63,10 @@ export function ActivityFeed({ items }: ActivityFeedProps) {
             </Avatar>
             <div className="min-w-0 flex-1">
               <p className="text-sm leading-snug text-foreground">
+                {displayName && (
+                  <span className="font-medium">{displayName}</span>
+                )}
+                {displayName && ' '}
                 <span className="text-muted-foreground">{info.label}</span>
                 {targetName && (
                   <>
