@@ -12,6 +12,7 @@ import {
   Upload,
   Settings,
   Pencil,
+  MessageSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -20,13 +21,14 @@ import { FileListPanel } from '@/components/file-list-panel';
 import FileUploader from '@/components/file-uploader';
 import { MemberManagement } from '@/components/member-management';
 import { ActivityFeed } from '@/components/activity-feed';
+import { VaultChatPanel } from '@/components/vault-chat-panel';
 import { RoleBadge } from '@/components/role-badge';
 import { AddSourceDialog } from '@/components/add-source-dialog';
 import { EditVaultDialog } from '@/components/edit-vault-dialog';
 import { VaultSettingsDialog } from '@/components/vault-settings-dialog';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useAuth } from '@/hooks/use-auth';
-import { useRealtimeSources, useRealtimeMembers, useRealtimeActivity } from '@/hooks/use-realtime';
+import { useRealtimeSources, useRealtimeMembers, useRealtimeActivity, useRealtimeFiles } from '@/hooks/use-realtime';
 import { useVaultNotifications } from '@/hooks/use-vault-notifications';
 import { vaultService } from '@/lib/services/vault.service';
 import { sourceService } from '@/lib/services/source.service';
@@ -222,6 +224,10 @@ export default function VaultDetailPage() {
               <Activity className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Activity</span>
             </TabsTrigger>
+            <TabsTrigger value="chat" className="gap-1.5">
+              <MessageSquare className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Chat</span>
+            </TabsTrigger>
           </TabsList>
 
           {/* Sources Tab */}
@@ -291,6 +297,11 @@ export default function VaultDetailPage() {
           <TabsContent value="activity" className="space-y-4">
             <h2 className="text-lg font-semibold">Activity</h2>
             <ActivityFeed items={activity} />
+          </TabsContent>
+
+          {/* Chat Tab */}
+          <TabsContent value="chat">
+            <VaultChatPanel vaultId={vaultId} vaultName={vault.name} />
           </TabsContent>
         </Tabs>
       </main>

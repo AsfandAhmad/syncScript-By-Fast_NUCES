@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getAuthUser, unauthorizedResponse } from '@/lib/api-auth';
+import { indexAnnotation } from '@/lib/rag/auto-index';
 
 /**
  * GET /api/annotations?source_id=xxx – list annotations for a source
@@ -132,6 +133,11 @@ export async function POST(request: NextRequest) {
           try { await supabase.from('notifications').insert(notifRows); } catch { /* table may not exist */ }
         }
       }
+    }
+
+    // Fire-and-forget: index annotation for RAG chatbot
+    if (source) {
+      indexAnnotation(data.id, source.vault_id).catch(() => {});
     }
 
     return NextResponse.json({ data }, { status: 201 });

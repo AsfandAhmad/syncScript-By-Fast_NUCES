@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getAuthUser, unauthorizedResponse } from '@/lib/api-auth';
+import { indexSource, deleteChunks } from '@/lib/rag/auto-index';
 
 /**
  * GET /api/sources/[id] – get a specific source
@@ -85,6 +86,9 @@ export async function PATCH(
       metadata: { source_id: sourceId },
     });
 
+    // Re-index source for RAG chatbot
+    indexSource(sourceId, currentSource.vault_id).catch(() => {});
+
     return NextResponse.json({ data });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
@@ -129,6 +133,9 @@ export async function DELETE(
         metadata: { source_id: sourceId },
       });
     }
+
+    // Remove RAG embeddings
+    deleteChunks('source', sourceId).catch(() => {});
 
     return NextResponse.json({ success: true });
   } catch (err) {

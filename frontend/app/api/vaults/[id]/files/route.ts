@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getAuthUser, unauthorizedResponse } from '@/lib/api-auth';
+import { indexFile, deleteChunks } from '@/lib/rag/auto-index';
 
 /**
  * GET /api/vaults/[id]/files – list files for a vault
@@ -123,6 +124,9 @@ export async function POST(
       }
     }
 
+    // Fire-and-forget: index file for RAG chatbot
+    indexFile(data.id, vaultId).catch(() => {});
+
     return NextResponse.json({ data }, { status: 201 });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
@@ -172,6 +176,9 @@ export async function DELETE(
       actor_id: user.id,
       metadata: { file_id: fileId },
     });
+
+    // Remove RAG embeddings
+    if (fileId) deleteChunks('file', fileId).catch(() => {});
 
     return NextResponse.json({ success: true });
   } catch (err) {

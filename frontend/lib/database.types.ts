@@ -107,6 +107,47 @@ export interface PaginatedResponse<T> {
   error: string | null;
 }
 
+// --- RAG Chatbot Types ---
+
+export interface DocumentChunk {
+  id: string;
+  vault_id: string;
+  source_type: 'source' | 'annotation' | 'file';
+  source_id: string;
+  chunk_index: number;
+  content: string;
+  metadata: Record<string, any>;
+  embedding?: number[];
+  similarity?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatConversation {
+  id: string;
+  vault_id: string;
+  user_id: string;
+  title?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  citations: ChatCitation[];
+  created_at: string;
+}
+
+export interface ChatCitation {
+  source_type: 'source' | 'annotation' | 'file';
+  source_id: string;
+  title: string;
+  snippet: string;
+}
+
 export const ACTION_LABELS: Record<string, { label: string; category: string }> = {
   vault_created: { label: 'created the vault', category: 'vault' },
   source_added: { label: 'added a source', category: 'source' },

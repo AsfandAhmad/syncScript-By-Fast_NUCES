@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getAuthUser, unauthorizedResponse } from '@/lib/api-auth';
+import { indexSource } from '@/lib/rag/auto-index';
 
 /**
  * GET /api/vaults/[id]/sources – list sources for a vault
@@ -98,6 +99,9 @@ export async function POST(
         try { await supabase.from('notifications').insert(notifRows); } catch { /* table may not exist */ }
       }
     }
+
+    // Fire-and-forget: index source for RAG chatbot
+    indexSource(data.id, vaultId).catch(() => {});
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (err) {

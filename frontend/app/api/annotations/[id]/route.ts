@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getAuthUser, unauthorizedResponse } from '@/lib/api-auth';
+import { indexAnnotation, deleteChunks } from '@/lib/rag/auto-index';
 
 /**
  * GET /api/annotations/[id] – get a specific annotation
@@ -91,6 +92,9 @@ export async function PATCH(
         actor_id: user.id,
         metadata: { annotation_id: annotationId },
       });
+
+      // Re-index annotation for RAG chatbot
+      indexAnnotation(annotationId, source.vault_id).catch(() => {});
     }
 
     return NextResponse.json({ data });
@@ -145,6 +149,9 @@ export async function DELETE(
         });
       }
     }
+
+    // Remove RAG embeddings
+    deleteChunks('annotation', annotationId).catch(() => {});
 
     return NextResponse.json({ success: true });
   } catch (err) {
