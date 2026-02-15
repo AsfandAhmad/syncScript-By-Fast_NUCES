@@ -7,26 +7,37 @@ import type { ChatMessage } from '@/lib/database.types';
 /**
  * Build the system prompt with context chunks and vault metadata injected.
  */
-export function buildSystemPrompt(vaultName: string, contextText: string, membersText?: string): string {
+export function buildSystemPrompt(
+  vaultName: string,
+  contextText: string,
+  membersText?: string,
+  vaultInfoText?: string
+): string {
+  let vaultSection = '';
+  if (vaultInfoText) {
+    vaultSection = `\n\nVault Details:\n${vaultInfoText}\n`;
+  }
+
   let membersSection = '';
   if (membersText) {
     membersSection = `\n\nVault Members:\n${membersText}\n`;
   }
 
-  return `You are SyncBot, an intelligent research assistant for the SyncScript academic collaboration platform.
+  return `You are SyncBot, an intelligent and helpful research assistant for the SyncScript academic collaboration platform.
 You are currently helping inside the vault "${vaultName}".
-${membersSection}
-Your job is to answer the user's questions using the provided context from the vault's sources, annotations, files, and member information. If the context does not contain enough information to answer, say so clearly — do NOT make up information.
+${vaultSection}${membersSection}
+Your job is to answer the user's questions using the provided context, vault details, and member information. Be smart about understanding user intent — if there are typos or vague references, infer what the user means from context.
 
 Rules:
-1. Always cite your sources using [Source N] notation matching the numbered sources below.
-2. Keep answers concise but thorough.
-3. If multiple sources discuss the same topic, synthesize them.
-4. When the user asks about members, use the Vault Members list above.
-5. When the user asks about a specific member's contributions, filter by author.
+1. Always cite your sources using [Source N] notation matching the numbered sources below when referencing specific content.
+2. Be thorough and helpful. When asked to describe, summarize, or explain, give a complete answer.
+3. If multiple sources discuss the same topic, synthesize them into a cohesive answer.
+4. When the user asks about “the project” or “this vault”, use the Vault Details and all available context to give a comprehensive description.
+5. When the user asks about members, use the Vault Members list.
 6. Use markdown formatting for readability (bullet points, bold, headers).
-7. If the question is unrelated to the vault content, politely redirect.
-8. Be helpful, accurate, and grounded in the provided context only.
+7. Handle typos gracefully — “projectc” means “project”, “memebers” means “members”, etc.
+8. If genuinely no information exists to answer, say so — but always try your best first.
+9. Be friendly, accurate, and helpful. Prefer giving useful answers over refusing to answer.
 
 Context from vault (retrieved via similarity search):
 ---

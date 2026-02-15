@@ -45,14 +45,42 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Not a member of this vault' }, { status: 403 });
     }
 
-    // 3. Get vault name
+    // 3. Get vault details
     const { data: vault } = await supabase
       .from('vaults')
-      .select('name')
+      .select('name, description, created_at, owner_id')
       .eq('id', vaultId)
       .single();
 
     const vaultName = vault?.name || 'Vault';
+    const vaultDescription = vault?.description || '';
+    const vaultCreatedAt = vault?.created_at ? new Date(vault.created_at).toLocaleDateString() : '';
+
+    // Get owner info
+    let ownerName = '';
+    if (vault?.owner_id) {
+      try {
+        const { data: { user: ownerUser } } = await supabase.auth.admin.getUserById(vault.owner_id);
+        if (ownerUser) {
+          ownerName = ownerUser.user_metadata?.full_name || ownerUser.user_metadata?.name || ownerUser.email?.split('@')[0] || '';
+        }
+      } catch { /* skip */ }
+    }
+
+    // Build vault info text
+    const vaultInfoParts: string[] = [`Name: ${vaultName}`];
+    if (vaultDescription) vaultInfoParts.push(`Description: ${vaultDescription}`);
+    if (ownerName) vaultInfoParts.push(`Owner: ${ownerName}`);
+    if (vaultCreatedAt) vaultInfoParts.push(`Created: ${vaultCreatedAt}`);
+
+    // Count content
+    const [{ count: srcCount }, { count: annCount }, { count: fileCount }] = await Promise.all([
+      supabase.from('sources').select('id', { count: 'exact', head: true }).eq('vault_id', vaultId),
+      supabase.from('annotations').select('id', { count: 'exact', head: true }).eq('source_id', vaultId),
+      supabase.from('files').select('id', { count: 'exact', head: true }).eq('vault_id', vaultId),
+    ]);
+    vaultInfoParts.push(`Contains: ${srcCount || 0} sources, ${annCount || 0} annotations, ${fileCount || 0} files`);
+    const vaultInfoText = vaultInfoParts.join('\n');
 
     // 3b. Get vault members with their info
     const { data: members } = await supabase
@@ -136,7 +164,7 @@ export async function POST(request: NextRequest) {
     const { contextText, citations } = formatContext(chunks);
 
     // 8. Build prompt
-    const systemPrompt = buildSystemPrompt(vaultName, contextText, membersText);
+    const systemPrompt = buildSystemPrompt(vaultName, contextText, membersText, vaultInfoText);
     const messages = buildMessages(systemPrompt, history.slice(0, -1), question);
 
     // 9. Stream from Gemini (direct REST API with retry + model fallback)
