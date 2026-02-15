@@ -11,7 +11,6 @@ interface AuthContextType {
   signUp: (email: string, password: string, fullName?: string) => Promise<any>;
   signIn: (email: string, password: string) => Promise<any>;
   signInWithGoogle: () => Promise<void>;
-  signInWithLinkedIn: () => Promise<void>;
   signOut: () => Promise<boolean>;
   resetPassword: (email: string) => Promise<boolean>;
   updateProfile: (data: { full_name?: string }) => Promise<boolean>;
@@ -114,28 +113,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const signInWithLinkedIn = useCallback(async () => {
-    try {
-      setError(null);
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'linkedin_oidc',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          skipBrowserRedirect: true,
-        },
-      });
-      if (error) {
-        setError(error.message);
-        return;
-      }
-      if (data?.url) {
-        window.location.href = data.url;
-      }
-    } catch (err) {
-      setError(String(err));
-    }
-  }, []);
-
   const signOut = useCallback(async () => {
     try {
       const { error } = await supabase.auth.signOut();
@@ -197,7 +174,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signUp,
         signIn,
         signInWithGoogle,
-        signInWithLinkedIn,
         signOut,
         resetPassword,
         updateProfile,
