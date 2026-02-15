@@ -1,11 +1,11 @@
 /**
  * Gemini embedding wrapper for RAG pipeline.
- * Uses text-embedding-004 (768 dimensions).
+ * Uses gemini-embedding-001 (3072 dimensions).
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const EMBEDDING_MODEL = 'text-embedding-004';
+const EMBEDDING_MODEL = 'gemini-embedding-001';
 
 function getClient() {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -15,7 +15,7 @@ function getClient() {
 
 /**
  * Generate an embedding vector for a single text string.
- * Returns a 768-dimensional float array.
+ * Returns a 3072-dimensional float array.
  */
 export async function embedText(text: string): Promise<number[]> {
   const genAI = getClient();
