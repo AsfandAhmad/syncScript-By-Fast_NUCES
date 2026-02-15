@@ -10,29 +10,28 @@ import {
   Users,
   Activity,
   Upload,
-  ExternalLink,
+  Settings,
+  Pencil,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import { SourceItem } from '@/components/source-item';
 import { FileListPanel } from '@/components/file-list-panel';
 import FileUploader from '@/components/file-uploader';
 import { MemberManagement } from '@/components/member-management';
 import { ActivityFeed } from '@/components/activity-feed';
+import { RoleBadge } from '@/components/role-badge';
+import { AddSourceDialog } from '@/components/add-source-dialog';
+import { EditVaultDialog } from '@/components/edit-vault-dialog';
+import { VaultSettingsDialog } from '@/components/vault-settings-dialog';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useAuth } from '@/hooks/use-auth';
-import { useRealtimeSources, useRealtimeMembers, useRealtimeActivity } from '@/hooks/use-realtime';
+import { usePermissions } from '@/hooks/use-permissions';
+import { PermissionProvider } from '@/contexts/permission-context';
+import { useRealtimeSources, useRealtimeMembers, useRealtimeActivity, useRealtimeFiles } from '@/hooks/use-realtime';
 import { useVaultNotifications } from '@/hooks/use-vault-notifications';
+import { ConnectionStatus } from '@/components/connection-status';
+import { NotificationCenter } from '@/components/notification-center';
 import { vaultService } from '@/lib/services/vault.service';
 import { sourceService } from '@/lib/services/source.service';
 import { fileService } from '@/lib/services/file.service';
@@ -49,27 +48,34 @@ export default function VaultDetailPage() {
   // Core state
   const [vault, setVault] = useState<Vault | null>(null);
   const [loading, setLoading] = useState(true);
-  const [files, setFiles] = useState<FileRecord[]>([]);
   const [currentUserRole, setCurrentUserRole] = useState<Role | undefined>();
 
   // Sources – initial fetch
   const [initialSources, setInitialSources] = useState<Source[]>([]);
   const [initialMembers, setInitialMembers] = useState<VaultMember[]>([]);
   const [initialActivity, setInitialActivity] = useState<ActivityLog[]>([]);
+  const [initialFiles, setInitialFiles] = useState<FileRecord[]>([]);
 
   // Realtime subscriptions
   const { sources } = useRealtimeSources(vaultId, initialSources);
   const { members } = useRealtimeMembers(vaultId, initialMembers);
   const { activities: activity } = useRealtimeActivity(vaultId, initialActivity);
+  const { files } = useRealtimeFiles(vaultId, initialFiles);
 
   // In-app toast notifications for realtime events
   useVaultNotifications(vaultId);
 
   // Add source dialog
   const [addSourceOpen, setAddSourceOpen] = useState(false);
-  const [newSourceUrl, setNewSourceUrl] = useState('');
-  const [newSourceTitle, setNewSourceTitle] = useState('');
-  const [addingSource, setAddingSource] = useState(false);
+
+  // Edit vault dialog
+  const [editVaultOpen, setEditVaultOpen] = useState(false);
+
+  // Vault settings dialog
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Delete source confirmation
+  const [deleteSourceId, setDeleteSourceId] = useState<string | null>(null);
 
   const fetchVaultData = useCallback(async () => {
     setLoading(true);
@@ -98,7 +104,7 @@ export default function VaultDetailPage() {
       }
 
       if (filesRes.status === 'success') {
-        setFiles(filesRes.data || []);
+        setInitialFiles(filesRes.data || []);
       }
 
       // Fetch activity logs
@@ -123,30 +129,14 @@ export default function VaultDetailPage() {
     if (vaultId) fetchVaultData();
   }, [vaultId, fetchVaultData]);
 
-  const handleAddSource = async () => {
-    if (!newSourceUrl.trim()) return;
-    setAddingSource(true);
-    try {
-      const result = await sourceService.createSource(
-        vaultId,
-        newSourceUrl.trim(),
-        newSourceTitle.trim() || undefined
-      );
-      if (result.status === 'success') {
-        toast.success('Source added!');
-        setAddSourceOpen(false);
-        setNewSourceUrl('');
-        setNewSourceTitle('');
-      } else {
-        toast.error(result.error || 'Failed to add source');
-      }
-    } finally {
-      setAddingSource(false);
-    }
+  const handleDeleteSource = async (sourceId: string) => {
+    // Open confirm dialog instead of deleting immediately
+    setDeleteSourceId(sourceId);
   };
 
-  const handleDeleteSource = async (sourceId: string) => {
-    const result = await sourceService.deleteSource(sourceId);
+  const confirmDeleteSource = async () => {
+    if (!deleteSourceId) return;
+    const result = await sourceService.deleteSource(deleteSourceId);
     if (result.status === 'success') {
       toast.success('Source deleted');
     } else {
@@ -157,7 +147,7 @@ export default function VaultDetailPage() {
   const refreshFiles = async () => {
     const filesRes = await fileService.getFilesByVault(vaultId);
     if (filesRes.status === 'success') {
-      setFiles(filesRes.data || []);
+      setInitialFiles(filesRes.data || []);
     }
   };
 
@@ -167,6 +157,9 @@ export default function VaultDetailPage() {
       setInitialMembers(membersRes.data || []);
     }
   };
+
+  // Derive permissions from the current user's role (hook must be called unconditionally)
+  const permissions = usePermissions(currentUserRole);
 
   if (loading) {
     return (
@@ -179,41 +172,59 @@ export default function VaultDetailPage() {
   if (!vault) return null;
 
   return (
+    <PermissionProvider role={currentUserRole} currentUserId={user?.id}>
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
         <div className="container mx-auto flex h-14 items-center gap-4 px-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard')}>
+          <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard')} aria-label="Back to dashboard">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="flex-1 min-w-0">
-            <h1 className="truncate font-semibold">{vault.name}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="truncate font-semibold">{vault.name}</h1>
+              {currentUserRole && <RoleBadge role={currentUserRole} />}
+            </div>
             {vault.description && (
               <p className="truncate text-xs text-muted-foreground">{vault.description}</p>
             )}
           </div>
+          {/* Vault actions – owner only */}
+          {permissions.isOwner && (
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" onClick={() => setEditVaultOpen(true)} aria-label="Edit vault">
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)} aria-label="Vault settings">
+                <Settings className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+          <NotificationCenter />
         </div>
       </header>
+
+      <ConnectionStatus />
 
       {/* Main content with tabs */}
       <main className="container mx-auto px-4 py-6">
         <Tabs defaultValue="sources" className="space-y-6">
-          <TabsList>
+          <TabsList className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="sources" className="gap-1.5">
               <FileText className="h-3.5 w-3.5" />
-              Sources ({sources.length})
+              <span className="hidden sm:inline">Sources</span> ({sources.length})
             </TabsTrigger>
             <TabsTrigger value="files" className="gap-1.5">
               <Upload className="h-3.5 w-3.5" />
-              Files ({files.length})
+              <span className="hidden sm:inline">Files</span> ({files.length})
             </TabsTrigger>
             <TabsTrigger value="members" className="gap-1.5">
               <Users className="h-3.5 w-3.5" />
-              Members ({members.length})
+              <span className="hidden sm:inline">Members</span> ({members.length})
             </TabsTrigger>
             <TabsTrigger value="activity" className="gap-1.5">
               <Activity className="h-3.5 w-3.5" />
-              Activity
+              <span className="hidden sm:inline">Activity</span>
             </TabsTrigger>
           </TabsList>
 
@@ -221,53 +232,12 @@ export default function VaultDetailPage() {
           <TabsContent value="sources" className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Sources</h2>
-              <Dialog open={addSourceOpen} onOpenChange={setAddSourceOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm">
-                    <Plus className="mr-1 h-3.5 w-3.5" />
-                    Add Source
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Add a source</DialogTitle>
-                    <DialogDescription>
-                      Paste a URL to a paper, article, or document.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-2">
-                    <div className="space-y-2">
-                      <Label>URL</Label>
-                      <Input
-                        placeholder="https://arxiv.org/abs/…"
-                        value={newSourceUrl}
-                        onChange={(e) => setNewSourceUrl(e.target.value)}
-                        autoFocus
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Title (optional)</Label>
-                      <Input
-                        placeholder="Paper title…"
-                        value={newSourceTitle}
-                        onChange={(e) => setNewSourceTitle(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setAddSourceOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleAddSource}
-                      disabled={addingSource || !newSourceUrl.trim()}
-                    >
-                      {addingSource && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Add Source
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+              {permissions.canCreateSource && (
+                <Button size="sm" onClick={() => setAddSourceOpen(true)}>
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Add Source
+                </Button>
+              )}
             </div>
 
             {sources.length === 0 ? (
@@ -285,7 +255,7 @@ export default function VaultDetailPage() {
                     key={source.id}
                     source={source}
                     onClick={() => router.push(`/vault/${vaultId}/source/${source.id}`)}
-                    onDelete={handleDeleteSource}
+                    onDelete={permissions.canDeleteSource ? handleDeleteSource : undefined}
                   />
                 ))}
               </div>
@@ -298,8 +268,15 @@ export default function VaultDetailPage() {
               <h2 className="text-lg font-semibold">Files</h2>
             </div>
 
-            <FileUploader vaultId={vaultId} onUploadComplete={refreshFiles} />
-            <FileListPanel files={files} vaultId={vaultId} onFileDeleted={refreshFiles} />
+            {permissions.canUploadFile && (
+              <FileUploader vaultId={vaultId} onUploadComplete={refreshFiles} />
+            )}
+            <FileListPanel
+              files={files}
+              vaultId={vaultId}
+              onFileDeleted={refreshFiles}
+              canDelete={permissions.canDeleteFile}
+            />
           </TabsContent>
 
           {/* Members Tab */}
@@ -322,5 +299,44 @@ export default function VaultDetailPage() {
         </Tabs>
       </main>
     </div>
+
+    {/* Dialogs rendered outside main layout */}
+    <AddSourceDialog
+      open={addSourceOpen}
+      onOpenChange={setAddSourceOpen}
+      vaultId={vaultId}
+    />
+
+    {vault && (
+      <>
+        <EditVaultDialog
+          open={editVaultOpen}
+          onOpenChange={setEditVaultOpen}
+          vault={vault}
+          onVaultUpdated={fetchVaultData}
+        />
+
+        <VaultSettingsDialog
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          vault={vault}
+          sourcesCount={sources.length}
+          filesCount={files.length}
+          membersCount={members.length}
+          onVaultUpdated={fetchVaultData}
+          onVaultDeleted={() => router.push('/dashboard')}
+        />
+      </>
+    )}
+
+    <ConfirmDialog
+      open={!!deleteSourceId}
+      onOpenChange={(v) => { if (!v) setDeleteSourceId(null); }}
+      title="Delete source?"
+      description="This will permanently delete this source and all its annotations. This action cannot be undone."
+      actionLabel="Delete Source"
+      onConfirm={confirmDeleteSource}
+    />
+    </PermissionProvider>
   );
 }

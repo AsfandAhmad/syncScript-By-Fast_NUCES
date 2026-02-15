@@ -14,6 +14,10 @@ interface AnnotationEditorProps {
   annotations: Annotation[];
   currentUserId?: string;
   onAnnotationsChanged?: () => void;
+  /** When false the create annotation form is hidden (viewer role). Defaults to true. */
+  canAdd?: boolean;
+  /** When false edit/delete buttons are hidden. Defaults to true. */
+  canEdit?: boolean;
 }
 
 export function AnnotationEditor({
@@ -21,6 +25,8 @@ export function AnnotationEditor({
   annotations,
   currentUserId,
   onAnnotationsChanged,
+  canAdd = true,
+  canEdit = true,
 }: AnnotationEditorProps) {
   const [content, setContent] = useState('');
   const [saving, setSaving] = useState(false);
@@ -61,7 +67,8 @@ export function AnnotationEditor({
 
   return (
     <div className="space-y-4">
-      {/* New annotation input */}
+      {/* New annotation input – hidden for viewers */}
+      {canAdd && (
       <div className="space-y-2">
         <Textarea
           placeholder="Write an annotation…"
@@ -80,6 +87,7 @@ export function AnnotationEditor({
           </Button>
         </div>
       </div>
+      )}
 
       {/* Annotation list */}
       <div className="space-y-2">
@@ -93,8 +101,8 @@ export function AnnotationEditor({
               key={ann.id}
               annotation={ann}
               currentUserId={currentUserId}
-              onUpdate={handleUpdate}
-              onDelete={handleDelete}
+              onUpdate={canEdit ? handleUpdate : undefined}
+              onDelete={canEdit ? handleDelete : undefined}
             />
           ))
         )}

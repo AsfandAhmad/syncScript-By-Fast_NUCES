@@ -40,7 +40,29 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ data, count: count || 0 });
+    // Enrich annotations with author name/email
+    const enriched = await Promise.all(
+      (data || []).map(async (ann: Record<string, unknown>) => {
+        if (!ann.created_by) return ann;
+        try {
+          const { data: { user: authorUser } } = await supabase.auth.admin.getUserById(
+            ann.created_by as string
+          );
+          return {
+            ...ann,
+            author_email: authorUser?.email ?? null,
+            author_name:
+              authorUser?.user_metadata?.full_name ??
+              authorUser?.user_metadata?.name ??
+              null,
+          };
+        } catch {
+          return ann;
+        }
+      })
+    );
+
+    return NextResponse.json({ data: enriched, count: count || 0 });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
@@ -92,6 +114,24 @@ export async function POST(request: NextRequest) {
         actor_id: user.id,
         metadata: { annotation_id: data.id, source_id },
       });
+
+      // Notify vault members (excluding the annotator)
+      const { data: members } = await supabase.from('vault_members').select('user_id').eq('vault_id', source.vault_id);
+      if (members && members.length > 0) {
+        const notifRows = members
+          .filter((m) => m.user_id !== user.id)
+          .map((m) => ({
+            user_id: m.user_id,
+            vault_id: source.vault_id,
+            type: 'annotation_added',
+            title: 'New annotation',
+            message: `A new annotation was added to a source`,
+            metadata: { vault_id: source.vault_id, source_id, annotation_id: data.id },
+          }));
+        if (notifRows.length > 0) {
+          try { await supabase.from('notifications').insert(notifRows); } catch { /* table may not exist */ }
+        }
+      }
     }
 
     return NextResponse.json({ data }, { status: 201 });

@@ -9,8 +9,12 @@ export interface Vault {
   description?: string;
   owner_id: string;
   is_archived: boolean;
+  is_public: boolean;
   created_at: string;
   updated_at: string;
+  /** Populated by API enrichment on public listings */
+  owner_email?: string;
+  owner_name?: string;
 }
 
 export interface VaultMember {
@@ -20,6 +24,7 @@ export interface VaultMember {
   role: Role;
   joined_at: string;
   email?: string;
+  full_name?: string;
 }
 
 export interface Source {
@@ -42,6 +47,9 @@ export interface Annotation {
   created_by: string;
   created_at: string;
   updated_at: string;
+  /** Populated by API enrichment */
+  author_email?: string;
+  author_name?: string;
 }
 
 export interface FileRecord {
@@ -62,6 +70,20 @@ export interface ActivityLog {
   actor_id?: string;
   metadata: Record<string, any>;
   timestamp: string;
+}
+
+export type NotificationType = 'member_added' | 'source_added' | 'annotation_added' | 'file_uploaded';
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  vault_id?: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  read: boolean;
+  metadata: Record<string, any>;
+  created_at: string;
 }
 
 export interface User {

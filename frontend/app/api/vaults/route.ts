@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     const supabase = createServerSupabaseClient();
     const body = await request.json();
 
-    const { name, description } = body;
+    const { name, description, is_public } = body;
 
     if (!name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
 
     const { data, error } = await supabase
       .from('vaults')
-      .insert({ name, description, owner_id: user.id })
+      .insert({ name, description, owner_id: user.id, is_public: is_public ?? false })
       .select()
       .single();
 

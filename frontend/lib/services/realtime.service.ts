@@ -212,4 +212,95 @@ export const realtimeService = {
       supabase.removeChannel(channel);
     };
   },
+
+  /**
+   * Subscribe to file changes in a vault (uploads / deletes)
+   */
+  subscribeToFiles(vaultId: string, callback: RealtimeCallback<any>) {
+    const channel = supabase
+      .channel(`files:${vaultId}`)
+      .on(
+        'postgres_changes' as const,
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'files',
+          filter: `vault_id=eq.${vaultId}`,
+        } as any,
+        (payload: any) => {
+          callback({ type: 'file_uploaded', payload });
+        }
+      )
+      .on(
+        'postgres_changes' as const,
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'files',
+          filter: `vault_id=eq.${vaultId}`,
+        } as any,
+        (payload: any) => {
+          callback({ type: 'file_deleted', payload });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  },
+
+  /**
+   * Subscribe to notifications for the current user
+   */
+  subscribeToNotifications(userId: string, callback: RealtimeCallback<any>) {
+    const channel = supabase
+      .channel(`notifications:${userId}`)
+      .on(
+        'postgres_changes' as const,
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`,
+        } as any,
+        (payload: any) => {
+          callback({ type: 'notification_received', payload });
+        }
+      )
+      .on(
+        'postgres_changes' as const,
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`,
+        } as any,
+        (payload: any) => {
+          callback({ type: 'notification_updated', payload });
+        }
+      )
+      .on(
+        'postgres_changes' as const,
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`,
+        } as any,
+        (payload: any) => {
+          callback({ type: 'notification_deleted', payload });
+        }
+      )
+      .subscribe((status) => {
+        // Silently handle subscription errors (e.g. table not yet created)
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('Notification realtime channel failed - table may not exist yet');
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  },
 };

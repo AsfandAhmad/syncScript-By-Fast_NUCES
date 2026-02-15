@@ -105,6 +105,24 @@ export async function POST(
       metadata: { file_id: data.id, file_name: file.name, file_size: file.size },
     });
 
+    // Notify vault members (excluding the uploader)
+    const { data: members } = await supabase.from('vault_members').select('user_id').eq('vault_id', vaultId);
+    if (members && members.length > 0) {
+      const notifRows = members
+        .filter((m) => m.user_id !== user.id)
+        .map((m) => ({
+          user_id: m.user_id,
+          vault_id: vaultId,
+          type: 'file_uploaded',
+          title: 'New file uploaded',
+          message: `"${file.name}" was uploaded`,
+          metadata: { vault_id: vaultId, file_id: data.id, file_name: file.name },
+        }));
+      if (notifRows.length > 0) {
+        try { await supabase.from('notifications').insert(notifRows); } catch { /* table may not exist */ }
+      }
+    }
+
     return NextResponse.json({ data }, { status: 201 });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });

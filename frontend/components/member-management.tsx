@@ -42,8 +42,7 @@ export function MemberManagement({
     if (!newMemberEmail.trim()) return;
     setAdding(true);
     try {
-      // Note: In a real app you'd look up user by email first.
-      // For now we pass the email as userId (the API/backend would resolve it).
+      // The API resolves email → UUID via Supabase Auth admin
       const result = await vaultService.addVaultMember(vaultId, newMemberEmail.trim(), newMemberRole);
       if (result.status === 'success') {
         toast.success('Member added');
@@ -88,7 +87,7 @@ export function MemberManagement({
       {isOwner && (
         <div className="flex items-center gap-2">
           <Input
-            placeholder="User ID or email…"
+            placeholder="Email address…"
             value={newMemberEmail}
             onChange={(e) => setNewMemberEmail(e.target.value)}
             className="flex-1"
@@ -125,12 +124,17 @@ export function MemberManagement({
             >
               <div className="flex items-center gap-2 min-w-0">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
-                  {(member.email || member.user_id).slice(0, 2).toUpperCase()}
+                  {(member.full_name || member.email || member.user_id).slice(0, 2).toUpperCase()}
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">
-                    {member.email || member.user_id}
+                    {member.full_name || member.email || member.user_id}
                   </p>
+                  {member.email && member.email !== member.full_name && (
+                    <p className="truncate text-xs text-muted-foreground">
+                      {member.email}
+                    </p>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     Joined {new Date(member.joined_at).toLocaleDateString()}
                   </p>

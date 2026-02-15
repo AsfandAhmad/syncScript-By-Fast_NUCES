@@ -81,6 +81,24 @@ export async function POST(
       metadata: { source_id: data.id, title: data.title },
     });
 
+    // Notify vault members (excluding the creator)
+    const { data: members } = await supabase.from('vault_members').select('user_id').eq('vault_id', vaultId);
+    if (members && members.length > 0) {
+      const notifRows = members
+        .filter((m) => m.user_id !== user.id)
+        .map((m) => ({
+          user_id: m.user_id,
+          vault_id: vaultId,
+          type: 'source_added',
+          title: 'New source added',
+          message: `A new source "${data.title}" was added`,
+          metadata: { vault_id: vaultId, source_id: data.id },
+        }));
+      if (notifRows.length > 0) {
+        try { await supabase.from('notifications').insert(notifRows); } catch { /* table may not exist */ }
+      }
+    }
+
     return NextResponse.json({ data }, { status: 201 });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
