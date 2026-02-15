@@ -1,0 +1,20 @@
+{
+  "name": "syncscript-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SyncScript backend API — caching, rate limiting, realtime cache invalidation",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.35.0",
+    "@upstash/redis": "^1.28.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.4.0",
+    "morgan": "^1.10.0"
+  }
+}

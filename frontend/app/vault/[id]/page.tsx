@@ -32,6 +32,7 @@ import { MemberManagement } from '@/components/member-management';
 import { ActivityFeed } from '@/components/activity-feed';
 import { useAuth } from '@/hooks/use-auth';
 import { useRealtimeSources, useRealtimeMembers, useRealtimeActivity } from '@/hooks/use-realtime';
+import { useVaultNotifications } from '@/hooks/use-vault-notifications';
 import { vaultService } from '@/lib/services/vault.service';
 import { sourceService } from '@/lib/services/source.service';
 import { fileService } from '@/lib/services/file.service';
@@ -60,6 +61,9 @@ export default function VaultDetailPage() {
   const { sources } = useRealtimeSources(vaultId, initialSources);
   const { members } = useRealtimeMembers(vaultId, initialMembers);
   const { activities: activity } = useRealtimeActivity(vaultId, initialActivity);
+
+  // In-app toast notifications for realtime events
+  useVaultNotifications(vaultId);
 
   // Add source dialog
   const [addSourceOpen, setAddSourceOpen] = useState(false);
