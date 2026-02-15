@@ -129,7 +129,10 @@ export async function POST(request: NextRequest) {
 
     const chat = model.startChat({
       history: geminiHistory as any,
-      systemInstruction: systemPrompt,
+      systemInstruction: {
+        role: 'user',
+        parts: [{ text: systemPrompt }],
+      },
     });
 
     const streamResult = await chat.sendMessageStream(question);
