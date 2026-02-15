@@ -70,6 +70,7 @@ export async function seedDatabase() {
         description: 'Comprehensive collection of AI and ML research papers',
         owner_id: ALICE_ID,
         is_archived: false,
+        is_public: true,
       },
       {
         id: '10000000-0000-0000-0000-000000000002',
@@ -77,6 +78,7 @@ export async function seedDatabase() {
         description: 'Strategic planning documents and market analysis',
         owner_id: ALICE_ID,
         is_archived: false,
+        is_public: false,
       },
       {
         id: '10000000-0000-0000-0000-000000000003',
@@ -84,6 +86,7 @@ export async function seedDatabase() {
         description: 'Tutorials, documentation, and code samples',
         owner_id: BOB_ID,
         is_archived: false,
+        is_public: true,
       },
       {
         id: '10000000-0000-0000-0000-000000000004',
@@ -91,6 +94,7 @@ export async function seedDatabase() {
         description: 'Old project files - archived for reference',
         owner_id: CHARLIE_ID,
         is_archived: true, // CASE: Archived vault
+        is_public: false,
       },
       {
         id: '10000000-0000-0000-0000-000000000005',
@@ -98,6 +102,7 @@ export async function seedDatabase() {
         description: 'Private collection with no additional members',
         owner_id: DIANA_ID,
         is_archived: false, // CASE: Vault with only owner
+        is_public: false,
       },
       {
         id: '10000000-0000-0000-0000-000000000006',
@@ -105,6 +110,40 @@ export async function seedDatabase() {
         description: 'Shared workspace for the entire team',
         owner_id: EVE_ID,
         is_archived: false, // CASE: Vault with all users
+        is_public: true,
+      },
+      // ── New public vaults for dashboard discovery ──
+      {
+        id: '10000000-0000-0000-0000-000000000007',
+        name: 'Open Source Study Group',
+        description: 'Community-driven collection of open source project analyses and best practices',
+        owner_id: BOB_ID,
+        is_archived: false,
+        is_public: true,
+      },
+      {
+        id: '10000000-0000-0000-0000-000000000008',
+        name: 'Data Science Bootcamp',
+        description: 'Curated resources for learning data science — from statistics to deep learning',
+        owner_id: CHARLIE_ID,
+        is_archived: false,
+        is_public: true,
+      },
+      {
+        id: '10000000-0000-0000-0000-000000000009',
+        name: 'UX Design Patterns',
+        description: 'Research papers and case studies on modern UX/UI design patterns',
+        owner_id: DIANA_ID,
+        is_archived: false,
+        is_public: true,
+      },
+      {
+        id: '10000000-0000-0000-0000-000000000010',
+        name: 'Cybersecurity Reading List',
+        description: 'Essential papers and articles on network security, cryptography, and threat analysis',
+        owner_id: EVE_ID,
+        is_archived: false,
+        is_public: true,
       },
     ];
 
@@ -144,6 +183,22 @@ export async function seedDatabase() {
       { vault_id: '10000000-0000-0000-0000-000000000006', user_id: BOB_ID, role: 'contributor' },
       { vault_id: '10000000-0000-0000-0000-000000000006', user_id: CHARLIE_ID, role: 'viewer' },
       { vault_id: '10000000-0000-0000-0000-000000000006', user_id: DIANA_ID, role: 'viewer' },
+
+      // Vault 7: Open Source Study Group (public) - Owner + 1 contributor
+      { vault_id: '10000000-0000-0000-0000-000000000007', user_id: BOB_ID, role: 'owner' },
+      { vault_id: '10000000-0000-0000-0000-000000000007', user_id: ALICE_ID, role: 'contributor' },
+
+      // Vault 8: Data Science Bootcamp (public) - Owner + 2 viewers
+      { vault_id: '10000000-0000-0000-0000-000000000008', user_id: CHARLIE_ID, role: 'owner' },
+      { vault_id: '10000000-0000-0000-0000-000000000008', user_id: EVE_ID, role: 'viewer' },
+      { vault_id: '10000000-0000-0000-0000-000000000008', user_id: DIANA_ID, role: 'viewer' },
+
+      // Vault 9: UX Design Patterns (public) - Owner only
+      { vault_id: '10000000-0000-0000-0000-000000000009', user_id: DIANA_ID, role: 'owner' },
+
+      // Vault 10: Cybersecurity Reading List (public) - Owner + 1 contributor
+      { vault_id: '10000000-0000-0000-0000-000000000010', user_id: EVE_ID, role: 'owner' },
+      { vault_id: '10000000-0000-0000-0000-000000000010', user_id: BOB_ID, role: 'contributor' },
     ];
 
     const members = await supabase.from('vault_members').insert(membersData).select();
@@ -264,6 +319,80 @@ export async function seedDatabase() {
         metadata: { type: 'design', tool: 'Figma', components: 150 },
         created_by: ALICE_ID,
       },
+
+      // ── Public vault sources ──
+
+      // Vault 7: Open Source Study Group
+      {
+        id: '20000000-0000-0000-0000-000000000013',
+        vault_id: '10000000-0000-0000-0000-000000000007',
+        url: 'https://github.com/torvalds/linux',
+        title: 'Linux Kernel - Architecture Overview',
+        metadata: { type: 'code', stars: 170000, language: 'C' },
+        created_by: BOB_ID,
+      },
+      {
+        id: '20000000-0000-0000-0000-000000000014',
+        vault_id: '10000000-0000-0000-0000-000000000007',
+        url: 'https://opensource.guide/how-to-contribute/',
+        title: 'How to Contribute to Open Source',
+        metadata: { type: 'guide', word_count: 3500 },
+        created_by: ALICE_ID,
+      },
+
+      // Vault 8: Data Science Bootcamp
+      {
+        id: '20000000-0000-0000-0000-000000000015',
+        vault_id: '10000000-0000-0000-0000-000000000008',
+        url: 'https://www.kaggle.com/learn/intro-to-machine-learning',
+        title: 'Kaggle - Intro to Machine Learning',
+        metadata: { type: 'course', lessons: 7, difficulty: 'beginner' },
+        created_by: CHARLIE_ID,
+      },
+      {
+        id: '20000000-0000-0000-0000-000000000016',
+        vault_id: '10000000-0000-0000-0000-000000000008',
+        url: 'https://arxiv.org/abs/1706.03762',
+        title: 'Statistical Learning Theory - Core Concepts',
+        metadata: { type: 'pdf', pages: 42, year: 2022 },
+        created_by: CHARLIE_ID,
+      },
+
+      // Vault 9: UX Design Patterns
+      {
+        id: '20000000-0000-0000-0000-000000000017',
+        vault_id: '10000000-0000-0000-0000-000000000009',
+        url: 'https://www.nngroup.com/articles/ten-usability-heuristics/',
+        title: 'Nielsen\'s 10 Usability Heuristics',
+        metadata: { type: 'article', word_count: 4200, year: 2020 },
+        created_by: DIANA_ID,
+      },
+      {
+        id: '20000000-0000-0000-0000-000000000018',
+        vault_id: '10000000-0000-0000-0000-000000000009',
+        url: 'https://lawsofux.com/',
+        title: 'Laws of UX - A Collection of Design Principles',
+        metadata: { type: 'reference', principles: 21 },
+        created_by: DIANA_ID,
+      },
+
+      // Vault 10: Cybersecurity Reading List
+      {
+        id: '20000000-0000-0000-0000-000000000019',
+        vault_id: '10000000-0000-0000-0000-000000000010',
+        url: 'https://owasp.org/www-project-top-ten/',
+        title: 'OWASP Top 10 Web Application Security Risks',
+        metadata: { type: 'reference', last_updated: '2025-09', category: 'web-security' },
+        created_by: EVE_ID,
+      },
+      {
+        id: '20000000-0000-0000-0000-000000000020',
+        vault_id: '10000000-0000-0000-0000-000000000010',
+        url: 'https://csrc.nist.gov/publications/detail/sp/800-53/rev-5/final',
+        title: 'NIST Security and Privacy Controls Framework',
+        metadata: { type: 'framework', pages: 492, revision: 5 },
+        created_by: BOB_ID,
+      },
     ];
 
     const sources = await supabase.from('sources').insert(sourcesData).select();
@@ -358,6 +487,51 @@ Action items:
       {
         source_id: '20000000-0000-0000-0000-000000000011',
         content: 'Agreed with Alice. Also need to consider holiday schedule in February.',
+        created_by: BOB_ID,
+      },
+
+      // ── Public vault annotations ──
+
+      // Open Source Study Group
+      {
+        source_id: '20000000-0000-0000-0000-000000000013',
+        content: 'The kernel module system is a great example of plugin architecture. Worth studying for our own projects.',
+        created_by: BOB_ID,
+      },
+      {
+        source_id: '20000000-0000-0000-0000-000000000014',
+        content: 'Step 3 about finding good first issues is the most actionable advice here.',
+        created_by: ALICE_ID,
+      },
+
+      // Data Science Bootcamp
+      {
+        source_id: '20000000-0000-0000-0000-000000000015',
+        content: 'Great starting point for beginners. The decision tree section is especially clear.',
+        created_by: CHARLIE_ID,
+      },
+      {
+        source_id: '20000000-0000-0000-0000-000000000016',
+        content: 'Theorem 4.2 on bias-variance tradeoff is essential. Make sure to understand the proof.',
+        created_by: EVE_ID,
+      },
+
+      // UX Design Patterns
+      {
+        source_id: '20000000-0000-0000-0000-000000000017',
+        content: 'Heuristic #1 (Visibility of System Status) applies directly to our loading states.',
+        created_by: DIANA_ID,
+      },
+
+      // Cybersecurity
+      {
+        source_id: '20000000-0000-0000-0000-000000000019',
+        content: 'Injection attacks are still #1 in 2025. We need to audit all our API endpoints.',
+        created_by: EVE_ID,
+      },
+      {
+        source_id: '20000000-0000-0000-0000-000000000020',
+        content: 'Section AC-2 on account management is relevant for our auth implementation.',
         created_by: BOB_ID,
       },
     ];
