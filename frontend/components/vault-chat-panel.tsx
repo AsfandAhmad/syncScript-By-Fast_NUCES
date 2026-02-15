@@ -249,16 +249,15 @@ export function VaultChatPanel({ vaultId, vaultName }: VaultChatPanelProps) {
                 timestamp={msg.timestamp}
               />
             ))}
+            {/* Citations shown inline at bottom of scroll */}
+            {lastCitations.length > 0 && (
+              <div className="mt-2 px-1">
+                <CitationCard citations={lastCitations} />
+              </div>
+            )}
           </div>
         )}
       </div>
-
-      {/* Citation card for last response */}
-      {lastCitations.length > 0 && (
-        <div className="border-t px-2 py-2">
-          <CitationCard citations={lastCitations} />
-        </div>
-      )}
 
       {/* Input area */}
       <div className="border-t px-2 py-3">
