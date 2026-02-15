@@ -95,14 +95,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithGoogle = useCallback(async () => {
     try {
       setError(null);
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
+          skipBrowserRedirect: true,
         },
       });
       if (error) {
         setError(error.message);
+        return;
+      }
+      if (data?.url) {
+        window.location.href = data.url;
       }
     } catch (err) {
       setError(String(err));
@@ -112,14 +117,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithLinkedIn = useCallback(async () => {
     try {
       setError(null);
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'linkedin_oidc',
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
+          skipBrowserRedirect: true,
         },
       });
       if (error) {
         setError(error.message);
+        return;
+      }
+      if (data?.url) {
+        window.location.href = data.url;
       }
     } catch (err) {
       setError(String(err));

@@ -136,8 +136,12 @@ function LoginForm() {
                 disabled={loading || !!oauthLoading}
                 onClick={async () => {
                   setOauthLoading('google');
-                  await signInWithGoogle();
-                  setOauthLoading(null);
+                  try {
+                    await signInWithGoogle();
+                  } catch {
+                    toast.error('Google sign-in failed');
+                  }
+                  // Don't clear loading — page will redirect
                 }}
               >
                 {oauthLoading === 'google' ? (
@@ -154,8 +158,12 @@ function LoginForm() {
                 disabled={loading || !!oauthLoading}
                 onClick={async () => {
                   setOauthLoading('linkedin');
-                  await signInWithLinkedIn();
-                  setOauthLoading(null);
+                  try {
+                    await signInWithLinkedIn();
+                  } catch {
+                    toast.error('LinkedIn sign-in failed');
+                  }
+                  // Don't clear loading — page will redirect
                 }}
               >
                 {oauthLoading === 'linkedin' ? (

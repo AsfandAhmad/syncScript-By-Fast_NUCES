@@ -164,8 +164,11 @@ export default function SignupPage() {
                 disabled={loading || !!oauthLoading}
                 onClick={async () => {
                   setOauthLoading('google');
-                  await signInWithGoogle();
-                  setOauthLoading(null);
+                  try {
+                    await signInWithGoogle();
+                  } catch {
+                    toast.error('Google sign-up failed');
+                  }
                 }}
               >
                 {oauthLoading === 'google' ? (
@@ -182,8 +185,11 @@ export default function SignupPage() {
                 disabled={loading || !!oauthLoading}
                 onClick={async () => {
                   setOauthLoading('linkedin');
-                  await signInWithLinkedIn();
-                  setOauthLoading(null);
+                  try {
+                    await signInWithLinkedIn();
+                  } catch {
+                    toast.error('LinkedIn sign-up failed');
+                  }
                 }}
               >
                 {oauthLoading === 'linkedin' ? (
