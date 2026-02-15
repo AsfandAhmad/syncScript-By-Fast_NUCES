@@ -75,6 +75,24 @@ export async function POST(
       );
     }
 
+    // Allow 'self' as shorthand for the authenticated user (used by Join button)
+    if (user_id === 'self') {
+      user_id = user.id;
+      // When self-joining a public vault, force role to viewer
+      const { data: vault } = await supabase
+        .from('vaults')
+        .select('is_public')
+        .eq('id', vaultId)
+        .single();
+      if (!vault?.is_public) {
+        return NextResponse.json(
+          { error: 'This vault is not public. You cannot self-join.' },
+          { status: 403 }
+        );
+      }
+      role = 'viewer';
+    }
+
     // If user_id looks like an email, resolve it to a UUID
     if (user_id.includes('@')) {
       const { data: { users }, error: listErr } = await supabase.auth.admin.listUsers();

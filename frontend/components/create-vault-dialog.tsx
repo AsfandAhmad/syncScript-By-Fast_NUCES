@@ -1,13 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Globe, Lock } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,7 @@ export function CreateVaultDialog({
   onVaultCreated,
 }: CreateVaultDialogProps) {
   const [submitting, setSubmitting] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
 
   const {
     register,
@@ -49,6 +51,7 @@ export function CreateVaultDialog({
       const result = await vaultService.createVault(
         values.name,
         values.description || undefined,
+        isPublic,
       );
       if (result.status === 'success') {
         toast.success('Vault created!');
@@ -67,7 +70,7 @@ export function CreateVaultDialog({
     <Dialog
       open={open}
       onOpenChange={(v) => {
-        if (!v) reset();
+        if (!v) { reset(); setIsPublic(false); }
         onOpenChange(v);
       }}
     >
@@ -105,6 +108,25 @@ export function CreateVaultDialog({
             {errors.description && (
               <p className="text-xs text-destructive">{errors.description.message}</p>
             )}
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="vault-public" className="flex items-center gap-2 text-sm font-medium">
+                {isPublic ? <Globe className="h-4 w-4 text-primary" /> : <Lock className="h-4 w-4 text-muted-foreground" />}
+                {isPublic ? 'Public vault' : 'Private vault'}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {isPublic
+                  ? 'Anyone can discover and join this vault.'
+                  : 'Only invited members can access this vault.'}
+              </p>
+            </div>
+            <Switch
+              id="vault-public"
+              checked={isPublic}
+              onCheckedChange={setIsPublic}
+            />
           </div>
 
           <DialogFooter>

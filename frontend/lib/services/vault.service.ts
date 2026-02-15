@@ -72,13 +72,68 @@ export const vaultService = {
   /**
    * Create a new vault
    */
-  async createVault(name: string, description?: string): Promise<ApiResponse<Vault>> {
+  /**
+   * Get all public vaults
+   */
+  async getPublicVaults(): Promise<ApiResponse<Vault[]>> {
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch('/api/vaults/public', { headers });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return {
+          data: null,
+          error: body.error || `Request failed (${response.status})`,
+          status: 'error',
+        };
+      }
+
+      const { data } = await response.json();
+      return { data: data || [], error: null, status: 'success' };
+    } catch (err) {
+      return { data: null, error: String(err), status: 'error' };
+    }
+  },
+
+  /**
+   * Join a public vault as a viewer
+   */
+  async joinPublicVault(vaultId: string): Promise<ApiResponse<VaultMember>> {
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/vaults/${vaultId}/members`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ user_id: 'self', role: 'viewer' }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return {
+          data: null,
+          error: body.error || `Request failed (${response.status})`,
+          status: 'error',
+        };
+      }
+
+      const { data } = await response.json();
+      return { data, error: null, status: 'success' };
+    } catch (err) {
+      return { data: null, error: String(err), status: 'error' };
+    }
+  },
+
+  /**
+   * Create a new vault
+   */
+  async createVault(name: string, description?: string, is_public?: boolean): Promise<ApiResponse<Vault>> {
     try {
       const headers = await getAuthHeaders();
       const response = await fetch('/api/vaults', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ name, description }),
+        body: JSON.stringify({ name, description, is_public: is_public ?? false }),
       });
 
       if (!response.ok) {

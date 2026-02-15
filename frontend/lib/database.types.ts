@@ -9,8 +9,12 @@ export interface Vault {
   description?: string;
   owner_id: string;
   is_archived: boolean;
+  is_public: boolean;
   created_at: string;
   updated_at: string;
+  /** Populated by API enrichment on public listings */
+  owner_email?: string;
+  owner_name?: string;
 }
 
 export interface VaultMember {
