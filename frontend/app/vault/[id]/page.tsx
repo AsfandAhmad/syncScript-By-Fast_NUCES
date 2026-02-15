@@ -26,11 +26,8 @@ import { EditVaultDialog } from '@/components/edit-vault-dialog';
 import { VaultSettingsDialog } from '@/components/vault-settings-dialog';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useAuth } from '@/hooks/use-auth';
-import { usePermissions } from '@/hooks/use-permissions';
-import { PermissionProvider } from '@/contexts/permission-context';
-import { useRealtimeSources, useRealtimeMembers, useRealtimeActivity, useRealtimeFiles } from '@/hooks/use-realtime';
-import { ConnectionStatus } from '@/components/connection-status';
-import { NotificationCenter } from '@/components/notification-center';
+import { useRealtimeSources, useRealtimeMembers, useRealtimeActivity } from '@/hooks/use-realtime';
+import { useVaultNotifications } from '@/hooks/use-vault-notifications';
 import { vaultService } from '@/lib/services/vault.service';
 import { sourceService } from '@/lib/services/source.service';
 import { fileService } from '@/lib/services/file.service';
@@ -60,6 +57,9 @@ export default function VaultDetailPage() {
   const { members } = useRealtimeMembers(vaultId, initialMembers);
   const { activities: activity } = useRealtimeActivity(vaultId, initialActivity);
   const { files } = useRealtimeFiles(vaultId, initialFiles);
+
+  // In-app toast notifications for realtime events
+  useVaultNotifications(vaultId);
 
   // Add source dialog
   const [addSourceOpen, setAddSourceOpen] = useState(false);
