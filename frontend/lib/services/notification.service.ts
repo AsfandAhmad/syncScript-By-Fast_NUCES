@@ -61,7 +61,11 @@ export const notificationService = {
 
     if (rows.length === 0) return;
 
-    await supabase.from('notifications').insert(rows);
+    try {
+      await supabase.from('notifications').insert(rows);
+    } catch {
+      // notifications table may not exist yet — silently skip
+    }
   },
 
   /**
@@ -70,27 +74,41 @@ export const notificationService = {
   async getNotifications(
     limit = 30
   ): Promise<ApiResponse<Notification[]>> {
-    const { data, error } = await supabase
-      .from('notifications')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(limit);
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit);
 
-    if (error) return { data: null, error: error.message, status: 'error' };
-    return { data: data as Notification[], error: null, status: 'success' };
+      if (error) {
+        // Table may not exist yet – return empty instead of throwing
+        if (error.message?.includes('does not exist') || error.code === 'PGRST204') {
+          return { data: [], error: 'table_not_found', status: 'error' };
+        }
+        return { data: null, error: error.message, status: 'error' };
+      }
+      return { data: data as Notification[], error: null, status: 'success' };
+    } catch {
+      return { data: [], error: 'table_not_found', status: 'error' };
+    }
   },
 
   /**
    * Get unread notification count
    */
   async getUnreadCount(): Promise<number> {
-    const { count, error } = await supabase
-      .from('notifications')
-      .select('*', { count: 'exact', head: true })
-      .eq('read', false);
+    try {
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('read', false);
 
-    if (error) return 0;
-    return count || 0;
+      if (error) return 0;
+      return count || 0;
+    } catch {
+      return 0;
+    }
   },
 
   /**

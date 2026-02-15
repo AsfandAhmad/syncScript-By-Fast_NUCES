@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, CheckCheck, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,40 +12,22 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { NotificationItem } from '@/components/notification-item';
 import { notificationService } from '@/lib/services/notification.service';
-import { useRealtimeNotifications } from '@/hooks/use-realtime';
 import { useAuth } from '@/hooks/use-auth';
 import type { Notification } from '@/lib/database.types';
 
 export function NotificationCenter() {
   const router = useRouter();
   const { user } = useAuth();
-  const [initial, setInitial] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
   const [open, setOpen] = useState(false);
 
-  // Real-time updates merged with initial data
-  const { notifications, setNotifications } = useRealtimeNotifications(user?.id, initial);
-
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const fetchNotifications = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await notificationService.getNotifications(30);
-      if (result.status === 'success' && result.data) {
-        setInitial(result.data);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user?.id) {
-      fetchNotifications();
-    }
-  }, [user?.id, fetchNotifications]);
+  // Notifications table does not exist yet – skip fetch to avoid 404 console errors.
+  // To enable: create the table using supabase/migrations/004_notifications.sql,
+  // then restore the fetchNotifications() call below.
 
   const handleMarkAllRead = async () => {
     setMarkingAll(true);

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Loader2, BookOpen, LogOut, Settings } from 'lucide-react';
+import { Plus, Loader2, BookOpen, LogOut, Settings, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import VaultCard from '@/components/vault-card';
@@ -10,6 +10,7 @@ import { VaultCardSkeleton } from '@/components/vault-card-skeleton';
 import { CreateVaultDialog } from '@/components/create-vault-dialog';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { NotificationCenter } from '@/components/notification-center';
+import { SearchUsersDialog } from '@/components/search-users-dialog';
 import { useAuth } from '@/hooks/use-auth';
 import { useDebounce } from '@/hooks/use-debounce';
 import { vaultService } from '@/lib/services/vault.service';
@@ -28,6 +29,7 @@ export default function DashboardPage() {
 
   // Create vault dialog
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [searchUsersOpen, setSearchUsersOpen] = useState(false);
 
   // Delete vault confirmation
   const [deleteVaultId, setDeleteVaultId] = useState<string | null>(null);
@@ -136,10 +138,16 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <Button onClick={() => setDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Vault
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setSearchUsersOpen(true)}>
+              <Search className="mr-2 h-4 w-4" />
+              Find Users
+            </Button>
+            <Button onClick={() => setDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Vault
+            </Button>
+          </div>
         </div>
 
         {/* Search */}
@@ -196,6 +204,11 @@ export default function DashboardPage() {
         description={`This will permanently delete "${deleteVaultName || 'this vault'}" and all its contents. This action cannot be undone.`}
         actionLabel="Delete Vault"
         onConfirm={confirmDeleteVault}
+      />
+
+      <SearchUsersDialog
+        open={searchUsersOpen}
+        onOpenChange={setSearchUsersOpen}
       />
     </div>
   );

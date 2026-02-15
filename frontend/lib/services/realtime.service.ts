@@ -292,7 +292,12 @@ export const realtimeService = {
           callback({ type: 'notification_deleted', payload });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        // Silently handle subscription errors (e.g. table not yet created)
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('Notification realtime channel failed - table may not exist yet');
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);

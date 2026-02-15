@@ -118,7 +118,9 @@ export async function POST(
           message: `"${file.name}" was uploaded`,
           metadata: { vault_id: vaultId, file_id: data.id, file_name: file.name },
         }));
-      if (notifRows.length > 0) await supabase.from('notifications').insert(notifRows);
+      if (notifRows.length > 0) {
+        try { await supabase.from('notifications').insert(notifRows); } catch { /* table may not exist */ }
+      }
     }
 
     return NextResponse.json({ data }, { status: 201 });

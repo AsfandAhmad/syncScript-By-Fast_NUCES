@@ -94,7 +94,9 @@ export async function POST(
           message: `A new source "${data.title}" was added`,
           metadata: { vault_id: vaultId, source_id: data.id },
         }));
-      if (notifRows.length > 0) await supabase.from('notifications').insert(notifRows);
+      if (notifRows.length > 0) {
+        try { await supabase.from('notifications').insert(notifRows); } catch { /* table may not exist */ }
+      }
     }
 
     return NextResponse.json({ data }, { status: 201 });

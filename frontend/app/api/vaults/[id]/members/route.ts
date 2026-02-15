@@ -27,7 +27,23 @@ export async function GET(
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ data });
+    // Resolve user emails/names from Supabase Auth
+    const enriched = await Promise.all(
+      (data || []).map(async (member) => {
+        try {
+          const { data: userData } = await supabase.auth.admin.getUserById(member.user_id);
+          return {
+            ...member,
+            email: userData?.user?.email || member.user_id,
+            full_name: userData?.user?.user_metadata?.full_name || null,
+          };
+        } catch {
+          return { ...member, email: member.user_id, full_name: null };
+        }
+      })
+    );
+
+    return NextResponse.json({ data: enriched });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
@@ -78,15 +94,19 @@ export async function POST(
     });
 
     // Notify added member
-    const { data: vault } = await supabase.from('vaults').select('name').eq('id', vaultId).single();
-    await supabase.from('notifications').insert({
-      user_id: user_id,
-      vault_id: vaultId,
-      type: 'member_added',
-      title: 'Added to vault',
-      message: `You've been added as ${role} to "${vault?.name || 'a vault'}"`,
-      metadata: { vault_id: vaultId, role },
-    });
+    try {
+      const { data: vault } = await supabase.from('vaults').select('name').eq('id', vaultId).single();
+      await supabase.from('notifications').insert({
+        user_id: user_id,
+        vault_id: vaultId,
+        type: 'member_added',
+        title: 'Added to vault',
+        message: `You've been added as ${role} to "${vault?.name || 'a vault'}"`,
+        metadata: { vault_id: vaultId, role },
+      });
+    } catch {
+      // notifications table may not exist yet – non-critical
+    }
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (err) {

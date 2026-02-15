@@ -106,7 +106,9 @@ export async function POST(request: NextRequest) {
             message: `A new annotation was added to a source`,
             metadata: { vault_id: source.vault_id, source_id, annotation_id: data.id },
           }));
-        if (notifRows.length > 0) await supabase.from('notifications').insert(notifRows);
+        if (notifRows.length > 0) {
+          try { await supabase.from('notifications').insert(notifRows); } catch { /* table may not exist */ }
+        }
       }
     }
 

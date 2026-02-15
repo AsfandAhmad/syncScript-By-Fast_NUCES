@@ -20,6 +20,7 @@ export interface VaultMember {
   role: Role;
   joined_at: string;
   email?: string;
+  full_name?: string;
 }
 
 export interface Source {
