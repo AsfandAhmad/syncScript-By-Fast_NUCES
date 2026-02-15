@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getAuthUser, unauthorizedResponse } from '@/lib/api-auth';
 import { chunkSource, chunkAnnotation, chunkFile } from '@/lib/rag/chunker';
 import { embedTexts } from '@/lib/rag/embeddings';
+import { extractFileContent } from '@/lib/rag/file-extractor';
 import type { Chunk } from '@/lib/rag/chunker';
 
 /**
@@ -95,7 +96,12 @@ export async function POST(request: NextRequest) {
     if (files && files.length > 0) {
       for (const file of files) {
         try {
-          const textContent = `File: ${file.file_name}`;
+          // Download and extract actual file content from Supabase Storage
+          const textContent = await extractFileContent(
+            file.file_url,
+            file.file_name,
+            file.file_size
+          );
           const chunks = chunkFile(file, textContent);
           if (chunks.length > 0) {
             await insertChunksBatch(supabase, vaultId, chunks);

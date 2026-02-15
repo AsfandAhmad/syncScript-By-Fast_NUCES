@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { chunkSource, chunkAnnotation, chunkFile } from './chunker';
 import { embedTexts } from './embeddings';
+import { extractFileContent } from './file-extractor';
 import type { Chunk } from './chunker';
 
 /**
@@ -93,9 +94,12 @@ export async function indexFile(fileId: string, vaultId: string) {
       .eq('source_type', 'file')
       .eq('source_id', fileId);
 
-    // For files, we use the file_name as text content placeholder.
-    // Full text extraction (PDF parsing, etc.) would be added in a future phase.
-    const textContent = `File: ${file.file_name}`;
+    // Download and extract actual file content from Supabase Storage
+    const textContent = await extractFileContent(
+      file.file_url,
+      file.file_name,
+      file.file_size
+    );
     const chunks = chunkFile(file, textContent);
     await insertChunks(vaultId, chunks);
   } catch {
