@@ -8,7 +8,7 @@ import type { Chunk } from '@/lib/rag/chunker';
 
 /**
  * POST /api/chat/index-vault — Bulk-index all existing content in a vault.
- * This is needed to backfill embeddings for content created before RAG was enabled.
+ * Optimized: collects all chunks first, then embeds in large parallel batches.
  *
  * Body: { vaultId }
  */
@@ -39,78 +39,98 @@ export async function POST(request: NextRequest) {
     // Clear all existing chunks for this vault (re-index fresh)
     await supabase.from('document_chunks').delete().eq('vault_id', vaultId);
 
-    let totalChunks = 0;
     let indexedSources = 0;
     let indexedAnnotations = 0;
     let indexedFiles = 0;
 
-    // ------ Index all sources ------
-    const { data: sources } = await supabase
-      .from('sources')
-      .select('*')
-      .eq('vault_id', vaultId);
+    // ====== Phase 1: Collect all chunks (fast, no API calls) ======
+    const allChunks: Chunk[] = [];
 
-    if (sources && sources.length > 0) {
-      for (const source of sources) {
-        try {
-          const chunks = chunkSource(source);
-          if (chunks.length > 0) {
-            await insertChunksBatch(supabase, vaultId, chunks);
-            totalChunks += chunks.length;
-            indexedSources++;
-          }
-        } catch (err) {
-          console.error(`[index-vault] Failed to index source ${source.id}:`, err);
+    // Fetch all data in parallel
+    const [sourcesRes, annotationsRes, filesRes] = await Promise.all([
+      supabase.from('sources').select('*').eq('vault_id', vaultId),
+      supabase.from('annotations').select('*, sources!inner(vault_id, title)').eq('sources.vault_id', vaultId),
+      supabase.from('files').select('*').eq('vault_id', vaultId),
+    ]);
+
+    // Chunk sources
+    const sources = sourcesRes.data || [];
+    for (const source of sources) {
+      try {
+        const chunks = chunkSource(source);
+        if (chunks.length > 0) {
+          allChunks.push(...chunks);
+          indexedSources++;
         }
+      } catch (err) {
+        console.error(`[index-vault] source ${source.id}:`, err);
       }
     }
 
-    // ------ Index all annotations ------
-    const { data: annotations } = await supabase
-      .from('annotations')
-      .select('*, sources!inner(vault_id, title)')
-      .eq('sources.vault_id', vaultId);
-
-    if (annotations && annotations.length > 0) {
-      for (const annotation of annotations) {
-        try {
-          const sourceTitle = (annotation as any).sources?.title || 'source';
-          const chunks = chunkAnnotation(annotation, sourceTitle);
-          if (chunks.length > 0) {
-            await insertChunksBatch(supabase, vaultId, chunks);
-            totalChunks += chunks.length;
-            indexedAnnotations++;
-          }
-        } catch (err) {
-          console.error(`[index-vault] Failed to index annotation ${annotation.id}:`, err);
+    // Chunk annotations
+    const annotations = annotationsRes.data || [];
+    for (const annotation of annotations) {
+      try {
+        const sourceTitle = (annotation as any).sources?.title || 'source';
+        const chunks = chunkAnnotation(annotation, sourceTitle);
+        if (chunks.length > 0) {
+          allChunks.push(...chunks);
+          indexedAnnotations++;
         }
+      } catch (err) {
+        console.error(`[index-vault] annotation ${annotation.id}:`, err);
       }
     }
 
-    // ------ Index all files ------
-    const { data: files } = await supabase
-      .from('files')
-      .select('*')
-      .eq('vault_id', vaultId);
+    // Extract file content + chunk (may involve downloads for real files)
+    const files = filesRes.data || [];
+    // Process files in parallel (up to 5 concurrent)
+    const fileChunkResults = await parallelMap(files, async (file) => {
+      try {
+        const textContent = await extractFileContent(
+          file.file_url,
+          file.file_name,
+          file.file_size
+        );
+        return chunkFile(file, textContent);
+      } catch (err) {
+        console.error(`[index-vault] file ${file.id}:`, err);
+        return [];
+      }
+    }, 5);
 
-    if (files && files.length > 0) {
-      for (const file of files) {
-        try {
-          // Download and extract actual file content from Supabase Storage
-          const textContent = await extractFileContent(
-            file.file_url,
-            file.file_name,
-            file.file_size
-          );
-          const chunks = chunkFile(file, textContent);
-          if (chunks.length > 0) {
-            await insertChunksBatch(supabase, vaultId, chunks);
-            totalChunks += chunks.length;
-            indexedFiles++;
-          }
-        } catch (err) {
-          console.error(`[index-vault] Failed to index file ${file.id}:`, err);
-        }
+    for (const chunks of fileChunkResults) {
+      if (chunks.length > 0) {
+        allChunks.push(...chunks);
+        indexedFiles++;
+      }
+    }
+
+    // ====== Phase 2: Embed + insert in large batches ======
+    const BATCH_SIZE = 50; // Gemini supports up to 100, use 50 for safety
+    let totalChunks = 0;
+
+    for (let i = 0; i < allChunks.length; i += BATCH_SIZE) {
+      const batch = allChunks.slice(i, i + BATCH_SIZE);
+      const texts = batch.map((c) => c.content);
+
+      try {
+        const embeddings = await embedTexts(texts);
+
+        const rows = batch.map((chunk, j) => ({
+          vault_id: vaultId,
+          source_type: chunk.metadata.source_type as string,
+          source_id: chunk.metadata.source_id as string,
+          content: chunk.content,
+          embedding: JSON.stringify(embeddings[j]),
+          metadata: chunk.metadata,
+        }));
+
+        await supabase.from('document_chunks').insert(rows);
+        totalChunks += rows.length;
+      } catch (err) {
+        console.error(`[index-vault] batch ${i}-${i + batch.length}:`, err);
+        // Continue with remaining batches even if one fails
       }
     }
 
@@ -130,28 +150,24 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Insert chunks with embeddings in batches to avoid hitting API limits.
+ * Run async tasks in parallel with a concurrency limit.
  */
-async function insertChunksBatch(
-  supabase: any,
-  vaultId: string,
-  chunks: Chunk[],
-  batchSize = 10
-) {
-  for (let i = 0; i < chunks.length; i += batchSize) {
-    const batch = chunks.slice(i, i + batchSize);
-    const texts = batch.map((c) => c.content);
-    const embeddings = await embedTexts(texts);
+async function parallelMap<T, R>(
+  items: T[],
+  fn: (item: T) => Promise<R>,
+  concurrency: number
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let idx = 0;
 
-    const rows = batch.map((chunk, j) => ({
-      vault_id: vaultId,
-      source_type: chunk.metadata.source_type as string,
-      source_id: chunk.metadata.source_id as string,
-      content: chunk.content,
-      embedding: JSON.stringify(embeddings[j]),
-      metadata: chunk.metadata,
-    }));
-
-    await supabase.from('document_chunks').insert(rows);
+  async function worker() {
+    while (idx < items.length) {
+      const i = idx++;
+      results[i] = await fn(items[i]);
+    }
   }
+
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
 }
