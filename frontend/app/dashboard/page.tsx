@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, BookOpen, LogOut, Settings, Search, Globe, FolderOpen, LayoutGrid } from 'lucide-react';
+import { Plus, BookOpen, LogOut, Settings, Search, Globe, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -138,31 +138,22 @@ export default function DashboardPage() {
 
   const myVaultIds = new Set(myVaults.map((v) => v.id));
 
-  // "All" tab: user's vaults + public vaults the user isn't already a member of
-  const allVaults: (Vault | PublicVault)[] = [
-    ...myVaults,
-    ...publicVaults.filter((pv) => !myVaultIds.has(pv.id)),
-  ];
-
   const getFilteredVaults = () => {
     switch (activeTab) {
       case 'my':
         return myVaults.filter(filterBySearch);
-      case 'public':
+      default: // 'all' — show all public vaults from all users
         return publicVaults.filter(filterBySearch);
-      default: // 'all'
-        return allVaults.filter(filterBySearch);
     }
   };
 
   const filteredVaults = getFilteredVaults();
-  const loading = activeTab === 'my' ? loadingMy : activeTab === 'public' ? loadingPublic : loadingMy || loadingPublic;
+  const loading = activeTab === 'my' ? loadingMy : loadingPublic;
 
   // ── Empty state messages ──
   const emptyMessage = {
-    all: { title: 'No vaults yet', desc: 'Create your first vault or browse public vaults to get started.' },
+    all: { title: 'No public vaults', desc: 'No vaults have been made public yet. Create one or check back later.' },
     my: { title: 'No personal vaults', desc: 'Create a vault to start organizing your research.' },
-    public: { title: 'No public vaults', desc: 'No vaults have been made public yet.' },
   }[activeTab] || { title: 'No vaults', desc: '' };
 
   return (
@@ -217,16 +208,12 @@ export default function DashboardPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <TabsList>
               <TabsTrigger value="all" className="gap-1.5">
-                <LayoutGrid className="h-4 w-4" />
+                <Globe className="h-4 w-4" />
                 All
               </TabsTrigger>
               <TabsTrigger value="my" className="gap-1.5">
                 <FolderOpen className="h-4 w-4" />
                 My Vaults
-              </TabsTrigger>
-              <TabsTrigger value="public" className="gap-1.5">
-                <Globe className="h-4 w-4" />
-                Public
               </TabsTrigger>
             </TabsList>
 
@@ -238,8 +225,8 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* All three tabs render the same grid structure */}
-          {['all', 'my', 'public'].map((tab) => (
+          {/* Both tabs render the same grid structure */}
+          {['all', 'my'].map((tab) => (
             <TabsContent key={tab} value={tab} className="mt-0">
               {loading ? (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
