@@ -2,6 +2,7 @@
  * Client-side chat service for the RAG chatbot.
  */
 
+import supabase from '@/lib/supabase-client';
 import type { ChatMessage, ChatCitation } from '@/lib/database.types';
 
 export interface StreamCallbacks {
@@ -9,6 +10,19 @@ export interface StreamCallbacks {
   onCitations: (citations: ChatCitation[], conversationId: string) => void;
   onDone: () => void;
   onError: (error: string) => void;
+}
+
+/**
+ * Helper to get the current user's access token for API requests.
+ */
+async function getAuthHeaders(): Promise<HeadersInit> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${session?.access_token || ''}`,
+  };
 }
 
 class ChatService {
@@ -21,9 +35,10 @@ class ChatService {
     conversationId: string | null,
     callbacks: StreamCallbacks
   ): Promise<void> {
+    const headers = await getAuthHeaders();
     const res = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ vaultId, question, conversationId }),
     });
 
@@ -82,7 +97,8 @@ class ChatService {
    * Get chat history for a vault.
    */
   async getHistory(vaultId: string): Promise<{ messages: ChatMessage[]; conversationId: string | null }> {
-    const res = await fetch(`/api/chat/history?vaultId=${vaultId}`);
+    const headers = await getAuthHeaders();
+    const res = await fetch(`/api/chat/history?vaultId=${vaultId}`, { headers });
     if (!res.ok) return { messages: [], conversationId: null };
 
     const json = await res.json();
@@ -96,7 +112,8 @@ class ChatService {
    * Clear chat history for a vault.
    */
   async clearHistory(vaultId: string): Promise<void> {
-    await fetch(`/api/chat/history?vaultId=${vaultId}`, { method: 'DELETE' });
+    const headers = await getAuthHeaders();
+    await fetch(`/api/chat/history?vaultId=${vaultId}`, { method: 'DELETE', headers });
   }
 
   /**
@@ -109,9 +126,10 @@ class ChatService {
     action: 'upsert' | 'delete' = 'upsert'
   ): Promise<void> {
     try {
+      const headers = await getAuthHeaders();
       await fetch('/api/embeddings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ vaultId, sourceType, sourceId, action }),
       });
     } catch {
