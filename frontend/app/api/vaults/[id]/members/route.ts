@@ -66,11 +66,44 @@ export async function POST(
     const supabase = createServerSupabaseClient();
     const body = await request.json();
 
-    const { user_id, role } = body;
+    let { user_id, role } = body;
 
     if (!user_id || !role) {
       return NextResponse.json(
-        { error: 'user_id and role are required' },
+        { error: 'user_id (or email) and role are required' },
+        { status: 400 }
+      );
+    }
+
+    // If user_id looks like an email, resolve it to a UUID
+    if (user_id.includes('@')) {
+      const { data: { users }, error: listErr } = await supabase.auth.admin.listUsers();
+      if (listErr) {
+        return NextResponse.json({ error: 'Failed to look up user' }, { status: 500 });
+      }
+      const found = users.find(
+        (u) => u.email?.toLowerCase() === user_id.toLowerCase()
+      );
+      if (!found) {
+        return NextResponse.json(
+          { error: `No user found with email "${user_id}"` },
+          { status: 404 }
+        );
+      }
+      user_id = found.id;
+    }
+
+    // Check if user is already a member
+    const { data: existing } = await supabase
+      .from('vault_members')
+      .select('id')
+      .eq('vault_id', vaultId)
+      .eq('user_id', user_id)
+      .maybeSingle();
+
+    if (existing) {
+      return NextResponse.json(
+        { error: 'This user is already a member of this vault' },
         { status: 400 }
       );
     }

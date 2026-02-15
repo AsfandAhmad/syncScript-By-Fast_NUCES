@@ -42,8 +42,7 @@ export function MemberManagement({
     if (!newMemberEmail.trim()) return;
     setAdding(true);
     try {
-      // Note: In a real app you'd look up user by email first.
-      // For now we pass the email as userId (the API/backend would resolve it).
+      // The API resolves email → UUID via Supabase Auth admin
       const result = await vaultService.addVaultMember(vaultId, newMemberEmail.trim(), newMemberRole);
       if (result.status === 'success') {
         toast.success('Member added');
@@ -88,7 +87,7 @@ export function MemberManagement({
       {isOwner && (
         <div className="flex items-center gap-2">
           <Input
-            placeholder="User ID or email…"
+            placeholder="Email address…"
             value={newMemberEmail}
             onChange={(e) => setNewMemberEmail(e.target.value)}
             className="flex-1"
