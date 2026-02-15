@@ -10,6 +10,8 @@ interface AuthContextType {
   error: string | null;
   signUp: (email: string, password: string, fullName?: string) => Promise<any>;
   signIn: (email: string, password: string) => Promise<any>;
+  signInWithGoogle: () => Promise<void>;
+  signInWithLinkedIn: () => Promise<void>;
   signOut: () => Promise<boolean>;
   resetPassword: (email: string) => Promise<boolean>;
   updateProfile: (data: { full_name?: string }) => Promise<boolean>;
@@ -90,6 +92,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const signInWithGoogle = useCallback(async () => {
+    try {
+      setError(null);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) {
+        setError(error.message);
+      }
+    } catch (err) {
+      setError(String(err));
+    }
+  }, []);
+
+  const signInWithLinkedIn = useCallback(async () => {
+    try {
+      setError(null);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'linkedin_oidc',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) {
+        setError(error.message);
+      }
+    } catch (err) {
+      setError(String(err));
+    }
+  }, []);
+
   const signOut = useCallback(async () => {
     try {
       const { error } = await supabase.auth.signOut();
@@ -150,6 +186,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         error,
         signUp,
         signIn,
+        signInWithGoogle,
+        signInWithLinkedIn,
         signOut,
         resetPassword,
         updateProfile,
