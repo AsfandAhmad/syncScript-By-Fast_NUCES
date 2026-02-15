@@ -85,6 +85,18 @@ function startRealtimeListener() {
         }
       }
     )
+    // --- files ---
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'files' },
+      (payload) => {
+        const vaultId = payload.new?.vault_id || payload.old?.vault_id;
+        if (vaultId) {
+          cache.invalidate(`vault:${vaultId}`);
+          notifyBackend('files', payload.eventType, payload);
+        }
+      }
+    )
     .subscribe((status) => {
       console.info(`[realtime] Subscription status: ${status}`);
     });
