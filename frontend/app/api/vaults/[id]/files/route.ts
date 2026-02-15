@@ -3,6 +3,29 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getAuthUser, unauthorizedResponse } from '@/lib/api-auth';
 import { indexFile, deleteChunks } from '@/lib/rag/auto-index';
 
+let bucketEnsured = false;
+
+/**
+ * Ensure the vault-files storage bucket exists (runs once per server lifecycle).
+ */
+async function ensureBucket(supabase: ReturnType<typeof createServerSupabaseClient>) {
+  if (bucketEnsured) return;
+  try {
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const exists = buckets?.some((b) => b.id === 'vault-files');
+    if (!exists) {
+      await supabase.storage.createBucket('vault-files', {
+        public: false,
+        fileSizeLimit: 52428800, // 50 MB
+      });
+      console.log('[files] Created vault-files storage bucket');
+    }
+    bucketEnsured = true;
+  } catch (err) {
+    console.error('[files] Error ensuring bucket:', err);
+  }
+}
+
 /**
  * GET /api/vaults/[id]/files – list files for a vault
  */
@@ -60,6 +83,9 @@ export async function POST(
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
+    // Ensure the storage bucket exists
+    await ensureBucket(supabase);
+
     // Determine subfolder based on file type
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
     const pdfExtensions = ['pdf'];
@@ -70,9 +96,14 @@ export async function POST(
     const timestamp = Date.now();
     const storagePath = `${vaultId}/${folder}/${timestamp}-${file.name}`;
 
+    // Convert File to ArrayBuffer for reliable upload
+    const fileBuffer = await file.arrayBuffer();
     const { error: uploadError } = await supabase.storage
       .from('vault-files')
-      .upload(storagePath, file);
+      .upload(storagePath, fileBuffer, {
+        contentType: file.type || 'application/octet-stream',
+        upsert: false,
+      });
 
     if (uploadError) {
       return NextResponse.json({ error: uploadError.message }, { status: 500 });

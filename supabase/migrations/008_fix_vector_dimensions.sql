@@ -10,7 +10,7 @@ DROP FUNCTION IF EXISTS match_vault_chunks;
 -- Recreate the embedding column as 768 dimensions
 ALTER TABLE document_chunks
   DROP COLUMN IF EXISTS embedding;
-
+    
 ALTER TABLE document_chunks
   ADD COLUMN embedding vector(768);
 

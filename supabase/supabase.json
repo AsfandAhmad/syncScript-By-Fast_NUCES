@@ -21,8 +21,7 @@
       "id": "vault-files",
       "name": "vault-files",
       "public": false,
-      "file_size_limit": 52428800,
-      "allowed_mime_types": ["application/pdf"]
+      "file_size_limit": 52428800
     }
   ]
 }

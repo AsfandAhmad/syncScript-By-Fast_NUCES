@@ -7,22 +7,24 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { fileService } from '@/lib/services/file.service';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
-const ALLOWED_TYPES = [
-  'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'text/csv',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'image/png',
-  'image/jpeg',
-  'text/plain',
-];
+// Allowed file extensions (more reliable than MIME types)
+const ALLOWED_EXTENSIONS = new Set([
+  'pdf', 'docx', 'doc', 'csv', 'xlsx', 'xls', 'pptx', 'ppt',
+  'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg',
+  'txt', 'md', 'markdown', 'json', 'xml', 'html', 'htm',
+  'js', 'ts', 'jsx', 'tsx', 'py', 'java', 'c', 'cpp', 'h',
+  'css', 'scss', 'yaml', 'yml', 'toml', 'sql', 'sh',
+  'go', 'rs', 'rb', 'php', 'swift', 'kt', 'r',
+  'zip', 'tar', 'gz', 'log', 'env', 'ini', 'cfg',
+]);
 
 function validateFile(file: File): string | null {
   if (file.size > MAX_FILE_SIZE) {
     return `File is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum size is 50 MB.`;
   }
-  if (ALLOWED_TYPES.length > 0 && !ALLOWED_TYPES.includes(file.type)) {
-    return `File type "${file.type || 'unknown'}" is not allowed. Accepted: PDF, DOCX, CSV, XLSX, PNG, JPG, TXT.`;
+  const ext = file.name.split('.').pop()?.toLowerCase() || '';
+  if (!ALLOWED_EXTENSIONS.has(ext)) {
+    return `File type ".${ext}" is not supported.`;
   }
   return null;
 }
@@ -133,12 +135,13 @@ export default function FileUploader({ vaultId, onUploadComplete }: FileUploader
               type="file"
               className="hidden"
               onChange={handleFileSelect}
-              accept=".pdf,.docx,.csv,.xlsx,.png,.jpg,.jpeg,.txt"
+              accept=".pdf,.docx,.doc,.csv,.xlsx,.xls,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.md,.json,.xml,.html,.js,.ts,.py,.java,.css,.yaml,.yml,.sql,.zip,.tar,.gz"
               disabled={uploading}
             />
           </label>
         </p>
         <p className="mt-1 text-xs text-muted-foreground">PDF, DOCX, CSV, images up to 50 MB</p>
+        <p className="text-[10px] text-muted-foreground/70">Also supports: MD, JSON, TXT, code files, and more</p>
       </div>
 
       {selectedFile && (
